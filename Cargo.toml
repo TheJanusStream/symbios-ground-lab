@@ -1,0 +1,35 @@
+[package]
+name = "symbios-ground-lab"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = "0.18"
+bevy_egui = "0.39"
+bevy_panorbit_camera = { version = "0.34", features = ["bevy_egui"] }
+symbios-ground = { version = "0.1", path = "../symbios-ground" }
+bevy_symbios_ground = { version = "0.1", path = "../bevy_symbios_ground", features = ["egui"] }
+rand = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand_pcg = "0.9"
+image = "0.25"
+
+[dev-dependencies]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+web-sys = { version = "0.3.82", features = [
+    "Document",
+    "Window",
+    "HtmlElement",
+    "HtmlAnchorElement",
+    "Blob",
+    "Url",
+    "BlobPropertyBag",
+    "Clipboard",
+    "ClipboardEvent",
+    "Navigator",
+] }
+wasm-bindgen = "0.2.108"
+js-sys = "0.3.82"

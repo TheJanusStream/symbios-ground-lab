@@ -1,0 +1,224 @@
+use bevy::prelude::*;
+use rand::Rng;
+use rand::SeedableRng;
+use rand_pcg::Pcg64Mcg;
+
+use crate::core::config::{
+    CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, TerrainConfig, VizDroplet,
+};
+use crate::logic::generation::generate_heightmap;
+
+/// Start the erosion visualisation: generate a base heightmap (no erosion),
+/// then begin stepping droplets frame-by-frame.
+pub fn start_erosion_viz(config: &TerrainConfig, state: &mut ErosionVizState) {
+    let mut cfg_no_erosion = config.clone();
+    cfg_no_erosion.erosion_enabled = false;
+    cfg_no_erosion.thermal_enabled = false;
+    let hm = generate_heightmap(&cfg_no_erosion);
+
+    state.heightmap = Some(hm);
+    state.rng = Pcg64Mcg::seed_from_u64(config.seed);
+    state.active.clear();
+    state.completed = 0;
+    state.total = config.erosion_drops;
+    state.config = config.clone();
+    state.enabled = true;
+}
+
+/// Advance the visualisation: spawn new droplets and step existing ones.
+/// Called every frame while `ErosionVizState::enabled` is true.
+pub fn step_erosion_viz(
+    mut viz: ResMut<ErosionVizState>,
+    mut current_hm: ResMut<CurrentHeightMap>,
+    mut dirty_mesh: ResMut<DirtyMesh>,
+    mut dirty: ResMut<DirtyFlags>,
+) {
+    if !viz.enabled {
+        return;
+    }
+    if viz.heightmap.is_none() {
+        return;
+    }
+
+    // Take ownership of the heightmap so we can borrow other viz fields freely.
+    let mut hm = viz.heightmap.take().unwrap();
+    let w = hm.width;
+    let h = hm.height;
+
+    // Snapshot immutable config data before entering the mutable section.
+    let cfg = viz.config.clone();
+    let steps = viz.steps_per_frame;
+    let drops_per_frame = viz.drops_per_frame;
+
+    // Spawn new droplets (up to drops_per_frame, respecting total budget).
+    let remaining = viz
+        .total
+        .saturating_sub(viz.completed + viz.active.len() as u32);
+    let to_spawn = drops_per_frame.min(remaining);
+    for _ in 0..to_spawn {
+        let px: f32 = viz.rng.random::<f32>() * (w - 1) as f32;
+        let pz: f32 = viz.rng.random::<f32>() * (h - 1) as f32;
+        viz.active.push(VizDroplet {
+            px,
+            pz,
+            dir_x: 0.0,
+            dir_z: 0.0,
+            vel: 1.0,
+            water: 1.0,
+            sediment: 0.0,
+            steps_left: 64,
+            trail: vec![Vec2::new(px, pz)],
+        });
+    }
+
+    // Step every active droplet.
+    let mut still_alive: Vec<VizDroplet> = Vec::with_capacity(viz.active.len());
+    let mut newly_completed: u32 = 0;
+
+    for mut drop in viz.active.drain(..) {
+        let mut alive = true;
+        for _ in 0..steps {
+            if drop.steps_left == 0 || drop.water < 0.01 {
+                alive = false;
+                break;
+            }
+            drop.steps_left -= 1;
+
+            let ix = drop.px.floor() as usize;
+            let iz = drop.pz.floor() as usize;
+            if ix + 1 >= w || iz + 1 >= h {
+                alive = false;
+                break;
+            }
+            let fx = drop.px - ix as f32;
+            let fz = drop.pz - iz as f32;
+
+            let h00 = hm.get(ix, iz);
+            let h10 = hm.get(ix + 1, iz);
+            let h01 = hm.get(ix, iz + 1);
+            let h11 = hm.get(ix + 1, iz + 1);
+
+            let height_here = h00 * (1.0 - fx) * (1.0 - fz)
+                + h10 * fx * (1.0 - fz)
+                + h01 * (1.0 - fx) * fz
+                + h11 * fx * fz;
+            let grad_x = (h10 - h00) * (1.0 - fz) + (h11 - h01) * fz;
+            let grad_z = (h01 - h00) * (1.0 - fx) + (h11 - h10) * fx;
+
+            drop.dir_x = drop.dir_x * cfg.inertia - grad_x * (1.0 - cfg.inertia);
+            drop.dir_z = drop.dir_z * cfg.inertia - grad_z * (1.0 - cfg.inertia);
+            let len = (drop.dir_x * drop.dir_x + drop.dir_z * drop.dir_z).sqrt();
+            if len < f32::EPSILON {
+                alive = false;
+                break;
+            }
+            drop.dir_x /= len;
+            drop.dir_z /= len;
+
+            let new_px = drop.px + drop.dir_x;
+            let new_pz = drop.pz + drop.dir_z;
+            if new_px < 0.0 || new_px >= (w - 1) as f32 || new_pz < 0.0 || new_pz >= (h - 1) as f32
+            {
+                alive = false;
+                break;
+            }
+
+            let new_ix = new_px.floor() as usize;
+            let new_iz = new_pz.floor() as usize;
+            let nfx = new_px - new_ix as f32;
+            let nfz = new_pz - new_iz as f32;
+            let nh00 = hm.get(new_ix, new_iz);
+            let nh10 = hm.get((new_ix + 1).min(w - 1), new_iz);
+            let nh01 = hm.get(new_ix, (new_iz + 1).min(h - 1));
+            let nh11 = hm.get((new_ix + 1).min(w - 1), (new_iz + 1).min(h - 1));
+            let height_new = nh00 * (1.0 - nfx) * (1.0 - nfz)
+                + nh10 * nfx * (1.0 - nfz)
+                + nh01 * (1.0 - nfx) * nfz
+                + nh11 * nfx * nfz;
+
+            let delta_h = height_new - height_here;
+            let slope = (-delta_h).max(cfg.capacity_factor.recip());
+            let capacity = slope * drop.vel * drop.water * cfg.capacity_factor;
+
+            if drop.sediment > capacity || delta_h > 0.0 {
+                let deposit = if delta_h > 0.0 {
+                    delta_h.min(drop.sediment)
+                } else {
+                    (drop.sediment - capacity) * cfg.deposition_rate
+                };
+                drop.sediment -= deposit;
+                let (w00, w10, w01, w11) = bilinear_weights(fx, fz);
+                if let Some(v) = hm.data.get_mut(iz * w + ix) {
+                    *v += deposit * w00;
+                }
+                if let Some(v) = hm.data.get_mut(iz * w + ix + 1) {
+                    *v += deposit * w10;
+                }
+                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix) {
+                    *v += deposit * w01;
+                }
+                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix + 1) {
+                    *v += deposit * w11;
+                }
+            } else {
+                let erode = ((capacity - drop.sediment) * cfg.erosion_rate)
+                    .min(-delta_h)
+                    .max(0.0);
+                drop.sediment += erode;
+                let (w00, w10, w01, w11) = bilinear_weights(fx, fz);
+                if let Some(v) = hm.data.get_mut(iz * w + ix) {
+                    *v -= erode * w00;
+                }
+                if let Some(v) = hm.data.get_mut(iz * w + ix + 1) {
+                    *v -= erode * w10;
+                }
+                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix) {
+                    *v -= erode * w01;
+                }
+                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix + 1) {
+                    *v -= erode * w11;
+                }
+            }
+
+            drop.vel = (drop.vel * drop.vel + delta_h * (-9.8)).abs().sqrt();
+            drop.water *= 1.0 - cfg.evaporation_rate;
+            drop.px = new_px;
+            drop.pz = new_pz;
+
+            drop.trail.push(Vec2::new(new_px, new_pz));
+            if drop.trail.len() > 16 {
+                drop.trail.remove(0);
+            }
+        }
+
+        if alive && drop.steps_left > 0 && drop.water >= 0.01 {
+            still_alive.push(drop);
+        } else {
+            newly_completed += 1;
+        }
+    }
+
+    viz.active = still_alive;
+    viz.completed += newly_completed;
+
+    // Publish snapshot for terrain mesh rebuild every Nth frame to avoid thrashing.
+    let snapshot = hm.clone();
+    viz.heightmap = Some(hm);
+    current_hm.0 = Some(snapshot);
+    dirty_mesh.0 = true;
+
+    if viz.completed >= viz.total && viz.active.is_empty() {
+        viz.enabled = false;
+        dirty.terrain = false;
+    }
+}
+
+#[inline]
+fn bilinear_weights(fx: f32, fz: f32) -> (f32, f32, f32, f32) {
+    (
+        (1.0 - fx) * (1.0 - fz),
+        fx * (1.0 - fz),
+        (1.0 - fx) * fz,
+        fx * fz,
+    )
+}

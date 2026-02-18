@@ -1,0 +1,67 @@
+use bevy::prelude::*;
+use bevy_symbios_ground::HeightMapMeshBuilder;
+
+use crate::core::config::{CurrentHeightMap, DirtyMesh, TerrainConfig};
+
+/// Marker component for the primary terrain mesh entity.
+#[derive(Component)]
+pub struct TerrainMesh;
+
+/// Spawn a placeholder flat plane until the first generation completes.
+pub fn spawn_terrain(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut dirty: ResMut<DirtyMesh>,
+) {
+    let placeholder = meshes.add(
+        Plane3d::default()
+            .mesh()
+            .size(256.0, 256.0)
+            .subdivisions(1)
+            .build(),
+    );
+    commands.spawn((
+        Mesh3d(placeholder),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.35, 0.55, 0.25),
+            perceptual_roughness: 0.9,
+            ..default()
+        })),
+        Transform::from_translation(Vec3::new(128.0, 0.0, 128.0)),
+        TerrainMesh,
+    ));
+
+    // Kick off the first generation immediately
+    dirty.0 = true;
+}
+
+/// Rebuild the terrain mesh whenever a new heightmap has been generated.
+pub fn rebuild_terrain(
+    mut query: Query<(&mut Mesh3d, &mut Transform), With<TerrainMesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    current_hm: Res<CurrentHeightMap>,
+    config: Res<TerrainConfig>,
+    mut dirty_mesh: ResMut<DirtyMesh>,
+) {
+    if !dirty_mesh.0 {
+        return;
+    }
+    let Some(hm) = &current_hm.0 else { return };
+
+    let mesh = HeightMapMeshBuilder::new()
+        .with_uv_tile_size(config.cell_scale * 4.0)
+        .build(hm);
+
+    let new_handle = meshes.add(mesh);
+    let world_w = hm.world_width();
+    let world_d = hm.world_depth();
+
+    for (mut mesh3d, mut transform) in &mut query {
+        mesh3d.0 = new_handle.clone();
+        // Keep the centre of the terrain at the camera focus
+        transform.translation = Vec3::new(world_w * 0.5, 0.0, world_d * 0.5);
+    }
+
+    dirty_mesh.0 = false;
+}
