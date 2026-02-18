@@ -2,9 +2,13 @@ use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::tasks::futures_lite::future;
 use symbios_ground::HeightMap;
-use symbios_ground::{FbmNoise, HydraulicErosion, TerrainGenerator, ThermalErosion};
+use symbios_ground::{
+    DiamondSquare, FbmNoise, HydraulicErosion, TerrainGenerator, ThermalErosion, VoronoiTerracing,
+};
 
-use crate::core::config::{CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, TerrainConfig};
+use crate::core::config::{
+    CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, GeneratorKind, TerrainConfig,
+};
 
 /// Spawns an async task to generate the terrain when `DirtyFlags::terrain` is set.
 pub fn start_generation(
@@ -45,18 +49,35 @@ pub fn generate_heightmap(cfg: &TerrainConfig) -> HeightMap {
     let size = (cfg.grid_size as usize).max(2);
     let mut hm = HeightMap::new(size, size, cfg.cell_scale);
 
-    // FBM noise
-    let fbm = FbmNoise {
-        seed: cfg.seed,
-        octaves: cfg.octaves,
-        persistence: cfg.persistence,
-        lacunarity: cfg.lacunarity,
-        base_frequency: cfg.base_frequency,
-    };
-    fbm.generate(&mut hm);
-    hm.normalize();
+    // Base terrain generation — dispatched by algorithm choice
+    match cfg.generator_kind {
+        GeneratorKind::FbmNoise => {
+            FbmNoise {
+                seed: cfg.seed,
+                octaves: cfg.octaves,
+                persistence: cfg.persistence,
+                lacunarity: cfg.lacunarity,
+                base_frequency: cfg.base_frequency,
+            }
+            .generate(&mut hm);
+            hm.normalize();
+        }
+        GeneratorKind::DiamondSquare => {
+            // DiamondSquare resizes the grid to 2^n+1 and normalises internally.
+            DiamondSquare::new(cfg.seed, cfg.ds_roughness).generate(&mut hm);
+        }
+        GeneratorKind::VoronoiTerracing => {
+            // VoronoiTerracing outputs heights already in [0, 1).
+            VoronoiTerracing::new(
+                cfg.seed,
+                cfg.voronoi_num_seeds.max(1) as usize,
+                cfg.voronoi_num_terraces.max(1) as usize,
+            )
+            .generate(&mut hm);
+        }
+    }
 
-    // Scale to desired height
+    // Scale to desired height (common to all generators)
     for v in hm.data_mut() {
         *v *= cfg.height_scale;
     }

@@ -3,7 +3,7 @@ use bevy_egui::{EguiContexts, egui};
 
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, ErosionVizState, ExportStatus, ExportTask, GenerationTask,
-    TerrainConfig, TerrainDebounce,
+    GeneratorKind, TerrainConfig, TerrainDebounce,
 };
 use crate::logic::erosion_viz::start_erosion_viz;
 use crate::visuals::export::{export_heightmap_png, export_json, spawn_obj_export};
@@ -74,12 +74,45 @@ pub fn render_ui(
 
             ui.separator();
 
-            // ── Noise ─────────────────────────────────────────────────────
-            egui::CollapsingHeader::new("Noise (FBM)")
+            // ── Generator ─────────────────────────────────────────────────
+            egui::CollapsingHeader::new("Generator")
                 .default_open(true)
                 .show(ui, |ui| {
                     let mut changed = false;
 
+                    // Algorithm picker
+                    ui.horizontal(|ui| {
+                        ui.label("Algorithm");
+                        let prev = config.generator_kind;
+                        egui::ComboBox::from_id_salt("generator_kind")
+                            .selected_text(match config.generator_kind {
+                                GeneratorKind::FbmNoise => "FBM Noise",
+                                GeneratorKind::DiamondSquare => "Diamond Square",
+                                GeneratorKind::VoronoiTerracing => "Voronoi Terracing",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut config.generator_kind,
+                                    GeneratorKind::FbmNoise,
+                                    "FBM Noise",
+                                );
+                                ui.selectable_value(
+                                    &mut config.generator_kind,
+                                    GeneratorKind::DiamondSquare,
+                                    "Diamond Square",
+                                );
+                                ui.selectable_value(
+                                    &mut config.generator_kind,
+                                    GeneratorKind::VoronoiTerracing,
+                                    "Voronoi Terracing",
+                                );
+                            });
+                        if config.generator_kind != prev {
+                            changed = true;
+                        }
+                    });
+
+                    // Seed is shared by all generators
                     ui.horizontal(|ui| {
                         ui.label("Seed");
                         let prev = config.seed;
@@ -89,10 +122,34 @@ pub fn render_ui(
                         }
                     });
 
-                    changed |= int_slider(ui, &mut config.octaves, "Octaves", 1..=10);
-                    changed |= slider(ui, &mut config.persistence, "Persistence", 0.1..=0.9);
-                    changed |= slider(ui, &mut config.lacunarity, "Lacunarity", 1.5..=4.0);
-                    changed |= slider(ui, &mut config.base_frequency, "Frequency", 0.5..=16.0);
+                    // Algorithm-specific parameters
+                    match config.generator_kind {
+                        GeneratorKind::FbmNoise => {
+                            changed |= int_slider(ui, &mut config.octaves, "Octaves", 1..=10);
+                            changed |=
+                                slider(ui, &mut config.persistence, "Persistence", 0.1..=0.9);
+                            changed |= slider(ui, &mut config.lacunarity, "Lacunarity", 1.5..=4.0);
+                            changed |=
+                                slider(ui, &mut config.base_frequency, "Frequency", 0.5..=16.0);
+                        }
+                        GeneratorKind::DiamondSquare => {
+                            changed |= slider(ui, &mut config.ds_roughness, "Roughness", 0.0..=1.0);
+                        }
+                        GeneratorKind::VoronoiTerracing => {
+                            changed |= int_slider(
+                                ui,
+                                &mut config.voronoi_num_seeds,
+                                "Seed points",
+                                1..=1000,
+                            );
+                            changed |= int_slider(
+                                ui,
+                                &mut config.voronoi_num_terraces,
+                                "Terraces",
+                                1..=32,
+                            );
+                        }
+                    }
 
                     if changed {
                         trigger_debounce(&mut debounce, &mut dirty);

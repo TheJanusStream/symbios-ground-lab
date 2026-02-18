@@ -4,6 +4,15 @@ use rand_pcg::Pcg64Mcg;
 use serde::{Deserialize, Serialize};
 use symbios_ground::HeightMap;
 
+/// Which base terrain generation algorithm to use.
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum GeneratorKind {
+    #[default]
+    FbmNoise,
+    DiamondSquare,
+    VoronoiTerracing,
+}
+
 /// All user-facing terrain generation parameters.
 /// This is the single source of truth – the UI is a reflection of this state.
 #[derive(Resource, Clone, Serialize, Deserialize)]
@@ -13,12 +22,24 @@ pub struct TerrainConfig {
     pub cell_scale: f32,
     pub height_scale: f32,
 
-    // FBM noise
+    // Algorithm selection
+    pub generator_kind: GeneratorKind,
+
+    // Seed shared by all generators
     pub seed: u64,
+
+    // FBM noise params
     pub octaves: u32,
     pub persistence: f32,
     pub lacunarity: f32,
     pub base_frequency: f32,
+
+    // Diamond Square params
+    pub ds_roughness: f32,
+
+    // Voronoi Terracing params
+    pub voronoi_num_seeds: u32,
+    pub voronoi_num_terraces: u32,
 
     // Hydraulic erosion
     pub erosion_enabled: bool,
@@ -47,6 +68,13 @@ impl Default for TerrainConfig {
             persistence: 0.5,
             lacunarity: 2.0,
             base_frequency: 4.0,
+
+            generator_kind: GeneratorKind::FbmNoise,
+
+            ds_roughness: 0.5,
+
+            voronoi_num_seeds: 64,
+            voronoi_num_terraces: 8,
 
             erosion_enabled: true,
             erosion_drops: 50_000,
