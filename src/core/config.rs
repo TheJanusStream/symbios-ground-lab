@@ -102,9 +102,15 @@ pub struct DirtyMesh(pub bool);
 pub enum ExportStatus {
     #[default]
     Idle,
+    /// A heavy export (e.g. OBJ) is running on a background thread.
+    Exporting,
     Done(String),
     Error(String),
 }
+
+/// Async OBJ export task in-flight (mirrors the GenerationTask pattern).
+#[derive(Resource, Default)]
+pub struct ExportTask(pub Option<bevy::tasks::Task<Result<String, String>>>);
 
 // ---------------------------------------------------------------------------
 // Erosion visualisation

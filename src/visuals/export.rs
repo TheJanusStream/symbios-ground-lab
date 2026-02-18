@@ -1,7 +1,9 @@
 use bevy::prelude::*;
+use bevy::tasks::AsyncComputeTaskPool;
+use bevy::tasks::futures_lite::future;
 use symbios_ground::HeightMap;
 
-use crate::core::config::{ExportStatus, TerrainConfig};
+use crate::core::config::{ExportStatus, ExportTask, TerrainConfig};
 
 // ---------------------------------------------------------------------------
 // Platform-agnostic file I/O
@@ -101,11 +103,29 @@ pub fn export_heightmap_png(hm: &HeightMap, status: &mut ExportStatus) {
 // Issue #7: OBJ mesh export
 // ---------------------------------------------------------------------------
 
-pub fn export_obj(hm: &HeightMap, status: &mut ExportStatus) {
-    let obj = heightmap_to_obj(hm);
-    match save_file("terrain.obj", &obj) {
-        Ok(()) => *status = ExportStatus::Done("terrain.obj".into()),
-        Err(e) => *status = ExportStatus::Error(e),
+/// Spawn a background task that serialises the heightmap to OBJ and writes it
+/// to disk, mirroring the AsyncComputeTaskPool pattern used for generation.
+/// Sets `ExportStatus::Exporting` immediately so the UI can show a spinner.
+pub fn spawn_obj_export(hm: HeightMap, task: &mut ExportTask, status: &mut ExportStatus) {
+    let pool = AsyncComputeTaskPool::get();
+    let t = pool.spawn(async move {
+        let obj = heightmap_to_obj(&hm);
+        save_file("terrain.obj", &obj)?;
+        Ok("terrain.obj".into())
+    });
+    task.0 = Some(t);
+    *status = ExportStatus::Exporting;
+}
+
+/// Poll the in-flight OBJ export task and update `ExportStatus` when done.
+pub fn poll_export_task(mut task: ResMut<ExportTask>, mut status: ResMut<ExportStatus>) {
+    let Some(ref mut t) = task.0 else { return };
+    if let Some(result) = future::block_on(future::poll_once(t)) {
+        *status = match result {
+            Ok(filename) => ExportStatus::Done(filename),
+            Err(e) => ExportStatus::Error(e),
+        };
+        task.0 = None;
     }
 }
 

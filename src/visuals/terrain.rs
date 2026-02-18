@@ -53,12 +53,18 @@ pub fn rebuild_terrain(
         .with_uv_tile_size(config.cell_scale * 4.0)
         .build(hm);
 
-    let new_handle = meshes.add(mesh);
     let world_w = hm.world_width();
     let world_d = hm.world_depth();
 
     for (mut mesh3d, mut transform) in &mut query {
-        mesh3d.0 = new_handle.clone();
+        // Update the existing asset buffer in-place so the old allocation is
+        // reused and never orphaned.  Only fall back to a new handle if the
+        // asset has somehow been removed from the store already.
+        if let Some(existing) = meshes.get_mut(&mesh3d.0) {
+            *existing = mesh.clone();
+        } else {
+            mesh3d.0 = meshes.add(mesh.clone());
+        }
         // Keep the centre of the terrain at the camera focus
         transform.translation = Vec3::new(world_w * 0.5, 0.0, world_d * 0.5);
     }

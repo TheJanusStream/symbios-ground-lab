@@ -2,11 +2,11 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
 use crate::core::config::{
-    CurrentHeightMap, DirtyFlags, ErosionVizState, ExportStatus, GenerationTask, TerrainConfig,
-    TerrainDebounce,
+    CurrentHeightMap, DirtyFlags, ErosionVizState, ExportStatus, ExportTask, GenerationTask,
+    TerrainConfig, TerrainDebounce,
 };
 use crate::logic::erosion_viz::start_erosion_viz;
-use crate::visuals::export::{export_heightmap_png, export_json, export_obj};
+use crate::visuals::export::{export_heightmap_png, export_json, spawn_obj_export};
 
 #[allow(clippy::too_many_arguments)]
 pub fn render_ui(
@@ -16,6 +16,7 @@ pub fn render_ui(
     mut debounce: ResMut<TerrainDebounce>,
     mut viz: ResMut<ErosionVizState>,
     mut export_status: ResMut<ExportStatus>,
+    mut export_task: ResMut<ExportTask>,
     task: Res<GenerationTask>,
     current_hm: Res<CurrentHeightMap>,
     time: Res<Time>,
@@ -227,6 +228,7 @@ pub fn render_ui(
                 .default_open(false)
                 .show(ui, |ui| {
                     let has_hm = current_hm.0.is_some();
+                    let is_exporting = matches!(&*export_status, ExportStatus::Exporting);
                     ui.add_enabled_ui(has_hm, |ui| {
                         ui.horizontal(|ui| {
                             if ui.button("PNG (16-bit heightmap)").clicked()
@@ -234,10 +236,12 @@ pub fn render_ui(
                             {
                                 export_heightmap_png(hm, &mut export_status);
                             }
-                            if ui.button("OBJ mesh").clicked()
+                            if ui
+                                .add_enabled(!is_exporting, egui::Button::new("OBJ mesh"))
+                                .clicked()
                                 && let Some(hm) = &current_hm.0
                             {
-                                export_obj(hm, &mut export_status);
+                                spawn_obj_export(hm.clone(), &mut export_task, &mut export_status);
                             }
                             if ui.button("JSON config").clicked() {
                                 export_json(&config, current_hm.0.as_ref(), &mut export_status);
@@ -247,6 +251,12 @@ pub fn render_ui(
 
                     match &*export_status {
                         ExportStatus::Idle => {}
+                        ExportStatus::Exporting => {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Exporting OBJ…");
+                            });
+                        }
                         ExportStatus::Done(f) => {
                             ui.colored_label(egui::Color32::GREEN, format!("✓ Saved: {f}"));
                         }

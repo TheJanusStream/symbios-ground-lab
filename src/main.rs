@@ -3,8 +3,8 @@ use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 
 use symbios_ground_lab::core::config::{
-    CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, ExportStatus, GenerationTask,
-    TerrainConfig, TerrainDebounce,
+    CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, ExportStatus, ExportTask,
+    GenerationTask, TerrainConfig, TerrainDebounce,
 };
 use symbios_ground_lab::{logic, ui, visuals};
 
@@ -29,6 +29,7 @@ fn main() {
         .init_resource::<GenerationTask>()
         .init_resource::<DirtyMesh>()
         .init_resource::<ExportStatus>()
+        .init_resource::<ExportTask>()
         .init_resource::<ErosionVizState>()
         // ── Startup ───────────────────────────────────────────────────────
         .add_systems(
@@ -46,6 +47,7 @@ fn main() {
                 logic::erosion_viz::step_erosion_viz,
                 visuals::terrain::rebuild_terrain,
                 visuals::droplets::draw_droplet_gizmos,
+                visuals::export::poll_export_task,
             )
                 .chain(),
         )

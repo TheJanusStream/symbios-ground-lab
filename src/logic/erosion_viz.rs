@@ -86,6 +86,8 @@ pub fn step_erosion_viz(
 
             let ix = drop.px.floor() as usize;
             let iz = drop.pz.floor() as usize;
+            // After this guard: ix <= w-2, iz <= h-2, so ix+1 and iz+1 are
+            // valid indices for all bilinear reads and writes below.
             if ix + 1 >= w || iz + 1 >= h {
                 alive = false;
                 break;
