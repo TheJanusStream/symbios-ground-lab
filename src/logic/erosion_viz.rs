@@ -42,8 +42,8 @@ pub fn step_erosion_viz(
 
     // Take ownership of the heightmap so we can borrow other viz fields freely.
     let mut hm = viz.heightmap.take().unwrap();
-    let w = hm.width;
-    let h = hm.height;
+    let w = hm.width();
+    let h = hm.height();
 
     // Snapshot immutable config data before entering the mutable section.
     let cfg = viz.config.clone();
@@ -148,36 +148,34 @@ pub fn step_erosion_viz(
                 };
                 drop.sediment -= deposit;
                 let (w00, w10, w01, w11) = bilinear_weights(fx, fz);
-                if let Some(v) = hm.data.get_mut(iz * w + ix) {
-                    *v += deposit * w00;
-                }
-                if let Some(v) = hm.data.get_mut(iz * w + ix + 1) {
-                    *v += deposit * w10;
-                }
-                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix) {
-                    *v += deposit * w01;
-                }
-                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix + 1) {
-                    *v += deposit * w11;
-                }
+                let v = hm.get_mut(ix, iz);
+                *v += deposit * w00;
+
+                let v = hm.get_mut(ix + 1, iz);
+                *v += deposit * w10;
+
+                let v = hm.get_mut(ix, iz + 1);
+                *v += deposit * w01;
+
+                let v = hm.get_mut(ix + 1, iz + 1);
+                *v += deposit * w11;
             } else {
                 let erode = ((capacity - drop.sediment) * cfg.erosion_rate)
                     .min(-delta_h)
                     .max(0.0);
                 drop.sediment += erode;
                 let (w00, w10, w01, w11) = bilinear_weights(fx, fz);
-                if let Some(v) = hm.data.get_mut(iz * w + ix) {
-                    *v -= erode * w00;
-                }
-                if let Some(v) = hm.data.get_mut(iz * w + ix + 1) {
-                    *v -= erode * w10;
-                }
-                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix) {
-                    *v -= erode * w01;
-                }
-                if let Some(v) = hm.data.get_mut((iz + 1) * w + ix + 1) {
-                    *v -= erode * w11;
-                }
+                let v = hm.get_mut(ix, iz);
+                *v -= erode * w00;
+
+                let v = hm.get_mut(ix + 1, iz);
+                *v -= erode * w10;
+
+                let v = hm.get_mut(ix, iz + 1);
+                *v -= erode * w01;
+
+                let v = hm.get_mut(ix + 1, iz + 1);
+                *v -= erode * w11;
             }
 
             drop.vel = (drop.vel * drop.vel + delta_h * (-9.8)).abs().sqrt();

@@ -57,7 +57,7 @@ pub fn generate_heightmap(cfg: &TerrainConfig) -> HeightMap {
     hm.normalize();
 
     // Scale to desired height
-    for v in &mut hm.data {
+    for v in hm.data_mut() {
         *v *= cfg.height_scale;
     }
 

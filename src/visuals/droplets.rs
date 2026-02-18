@@ -10,8 +10,8 @@ pub fn draw_droplet_gizmos(viz: Res<ErosionVizState>, mut gizmos: Gizmos) {
     let Some(ref hm) = viz.heightmap else { return };
 
     for drop in &viz.active {
-        let world_x = drop.px * hm.scale;
-        let world_z = drop.pz * hm.scale;
+        let world_x = drop.px * hm.scale();
+        let world_z = drop.pz * hm.scale();
         let world_y = hm.get_height_at(world_x, world_z) + 0.5;
 
         // Droplet head: bright cyan sphere
@@ -25,8 +25,8 @@ pub fn draw_droplet_gizmos(viz: Res<ErosionVizState>, mut gizmos: Gizmos) {
         let trail_len = drop.trail.len();
         for (i, pos) in drop.trail.iter().enumerate() {
             let alpha = i as f32 / trail_len as f32;
-            let tx = pos.x * hm.scale;
-            let tz = pos.y * hm.scale;
+            let tx = pos.x * hm.scale();
+            let tz = pos.y * hm.scale();
             let ty = hm.get_height_at(tx, tz) + 0.2;
             gizmos.sphere(
                 Vec3::new(tx, ty, tz),

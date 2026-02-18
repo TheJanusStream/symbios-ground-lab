@@ -71,17 +71,17 @@ pub fn export_heightmap_png(hm: &HeightMap, status: &mut ExportStatus) {
     use image::{ImageBuffer, Luma};
     use std::io::Cursor;
 
-    let w = hm.width as u32;
-    let h = hm.height as u32;
+    let w = hm.width() as u32;
+    let h = hm.height() as u32;
 
     // Find the current height range for full 16-bit dynamic range
-    let min = hm.data.iter().cloned().fold(f32::INFINITY, f32::min);
-    let max = hm.data.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let min = hm.data().iter().cloned().fold(f32::INFINITY, f32::min);
+    let max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let range = (max - min).max(f32::EPSILON);
 
     let mut img: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::new(w, h);
-    for z in 0..hm.height {
-        for x in 0..hm.width {
+    for z in 0..hm.height() {
+        for x in 0..hm.width() {
             let val = (hm.get(x, z) - min) / range;
             img.put_pixel(x as u32, z as u32, Luma([(val * 65535.0) as u16]));
         }
@@ -110,8 +110,8 @@ pub fn export_obj(hm: &HeightMap, status: &mut ExportStatus) {
 }
 
 fn heightmap_to_obj(hm: &HeightMap) -> String {
-    let w = hm.width;
-    let h = hm.height;
+    let w = hm.width();
+    let h = hm.height();
     let mut out = String::with_capacity(w * h * 64);
 
     out.push_str("# symbios-ground-lab terrain export\n");
@@ -119,9 +119,9 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
     // Vertices
     for z in 0..h {
         for x in 0..w {
-            let wx = x as f32 * hm.scale;
+            let wx = x as f32 * hm.scale();
             let wy = hm.get(x, z);
-            let wz = z as f32 * hm.scale;
+            let wz = z as f32 * hm.scale();
             out.push_str(&format!("v {wx:.4} {wy:.4} {wz:.4}\n"));
         }
     }
@@ -138,7 +138,7 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
     // Normals
     for z in 0..h {
         for x in 0..w {
-            let [nx, ny, nz] = hm.get_normal_at(x as f32 * hm.scale, z as f32 * hm.scale);
+            let [nx, ny, nz] = hm.get_normal_at(x as f32 * hm.scale(), z as f32 * hm.scale());
             out.push_str(&format!("vn {nx:.6} {ny:.6} {nz:.6}\n"));
         }
     }
@@ -179,10 +179,10 @@ pub fn export_json(config: &TerrainConfig, hm: Option<&HeightMap>, status: &mut 
     }
 
     let metadata = if let Some(hm) = hm {
-        let min = hm.data.iter().cloned().fold(f32::INFINITY, f32::min);
-        let max = hm.data.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let min = hm.data().iter().cloned().fold(f32::INFINITY, f32::min);
+        let max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
         Metadata {
-            grid_size: hm.width,
+            grid_size: hm.width(),
             world_width: hm.world_width(),
             world_depth: hm.world_depth(),
             height_range: Some([min, max]),
