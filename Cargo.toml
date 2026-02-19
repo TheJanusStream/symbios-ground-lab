@@ -9,6 +9,7 @@ bevy_egui = "0.39"
 bevy_panorbit_camera = { version = "0.34", features = ["bevy_egui"] }
 symbios-ground = { version = "0.1", path = "../symbios-ground" }
 bevy_symbios_ground = { version = "0.1", path = "../bevy_symbios_ground", features = ["egui"] }
+bevy_symbios_texture = { version = "0.1", path = "../bevy_symbios_texture" }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

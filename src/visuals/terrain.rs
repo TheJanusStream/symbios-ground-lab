@@ -1,13 +1,17 @@
 use bevy::prelude::*;
 use bevy_symbios_ground::HeightMapMeshBuilder;
 
-use crate::core::config::{CurrentHeightMap, DirtyMesh, TerrainConfig};
+use crate::core::config::{CurrentHeightMap, DirtyMesh};
+use crate::core::material_config::TerrainMaterialHandle;
 
 /// Marker component for the primary terrain mesh entity.
 #[derive(Component)]
 pub struct TerrainMesh;
 
 /// Spawn a placeholder flat plane until the first generation completes.
+///
+/// Also inserts a [`TerrainMaterialHandle`] resource so the material systems
+/// can update the terrain's [`StandardMaterial`] at runtime.
 pub fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -21,18 +25,20 @@ pub fn spawn_terrain(
             .subdivisions(1)
             .build(),
     );
+    let mat_handle = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.35, 0.55, 0.25),
+        perceptual_roughness: 0.9,
+        ..default()
+    });
     commands.spawn((
         Mesh3d(placeholder),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.35, 0.55, 0.25),
-            perceptual_roughness: 0.9,
-            ..default()
-        })),
+        MeshMaterial3d(mat_handle.clone()),
         Transform::default(),
         TerrainMesh,
     ));
+    commands.insert_resource(TerrainMaterialHandle(mat_handle));
 
-    // Kick off the first generation immediately
+    // Kick off the first generation immediately.
     dirty.0 = true;
 }
 
@@ -41,7 +47,6 @@ pub fn rebuild_terrain(
     mut query: Query<(&mut Mesh3d, &mut Transform), With<TerrainMesh>>,
     mut meshes: ResMut<Assets<Mesh>>,
     current_hm: Res<CurrentHeightMap>,
-    config: Res<TerrainConfig>,
     mut dirty_mesh: ResMut<DirtyMesh>,
 ) {
     if !dirty_mesh.0 {
@@ -49,8 +54,13 @@ pub fn rebuild_terrain(
     }
     let Some(hm) = &current_hm.0 else { return };
 
+    // UVs must span [0, 1] across the whole terrain so the baked splat
+    // texture (one pixel per heightmap cell, full-terrain coverage) maps
+    // exactly once over the mesh.  Using the world extent as the tile size
+    // achieves this: u = world_x / world_extent ∈ [0, 1].
+    let world_extent = (hm.width() - 1) as f32 * hm.scale();
     let mesh = HeightMapMeshBuilder::new()
-        .with_uv_tile_size(config.cell_scale * 4.0)
+        .with_uv_tile_size(world_extent)
         .build(hm);
 
     for (mut mesh3d, mut transform) in &mut query {
