@@ -14,9 +14,16 @@ pub struct SplatRuleParams {
 }
 
 impl SplatRuleParams {
-    pub fn to_splat_rule(&self) -> SplatRule {
+    /// Convert to a [`SplatRule`] with height thresholds scaled to world-space.
+    ///
+    /// `height_min`/`height_max` are stored in normalised [0, 1] but the
+    /// `SplatMapper` operates on raw heightmap values (i.e. [0, height_scale]).
+    pub fn to_splat_rule(&self, height_scale: f32) -> SplatRule {
         SplatRule::new(
-            (self.height_min, self.height_max),
+            (
+                self.height_min * height_scale,
+                self.height_max * height_scale,
+            ),
             (self.slope_min, self.slope_max),
             self.sharpness,
         )

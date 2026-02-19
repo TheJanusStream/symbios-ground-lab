@@ -90,12 +90,8 @@ pub fn render_material_ui(
                                     inner = true;
                                 }
 
-                                inner |= f32_slider(
-                                    ui,
-                                    &mut cfg.tile_scale,
-                                    "Tile scale",
-                                    1.0..=32.0,
-                                );
+                                inner |=
+                                    f32_slider(ui, &mut cfg.tile_scale, "Tile scale", 1.0..=512.0);
 
                                 inner
                             })
@@ -105,8 +101,7 @@ pub fn render_material_ui(
                         ui.separator();
 
                         // ── Layers ────────────────────────────────────────
-                        let layer_names =
-                            ["Grass (R)", "Dirt (G)", "Rock (B)", "Snow (A)"];
+                        let layer_names = ["Grass (R)", "Dirt (G)", "Rock (B)", "Snow (A)"];
 
                         for (i, name) in layer_names.iter().enumerate() {
                             ch |= egui::CollapsingHeader::new(*name)
@@ -142,9 +137,7 @@ pub fn render_material_ui(
                     MaterialStatus::GeneratingTextures => {
                         ui.horizontal(|ui| {
                             ui.spinner();
-                            ui.label(format!(
-                                "Generating textures… ({layers_ready}/4)"
-                            ));
+                            ui.label(format!("Generating textures… ({layers_ready}/4)"));
                         });
                     }
                     MaterialStatus::Ready => {
@@ -226,15 +219,30 @@ fn show_ground_config(ui: &mut egui::Ui, c: &mut GroundConfig) -> bool {
     ui.horizontal(|ui| {
         ui.label("R");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_dry[0]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_dry[0])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("G");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_dry[1]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_dry[1])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("B");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_dry[2]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_dry[2])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
     });
 
@@ -242,15 +250,30 @@ fn show_ground_config(ui: &mut egui::Ui, c: &mut GroundConfig) -> bool {
     ui.horizontal(|ui| {
         ui.label("R");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_moist[0]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_moist[0])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("G");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_moist[1]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_moist[1])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("B");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_moist[2]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_moist[2])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
     });
 
@@ -271,15 +294,30 @@ fn show_rock_config(ui: &mut egui::Ui, c: &mut RockConfig) -> bool {
     ui.horizontal(|ui| {
         ui.label("R");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_light[0]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_light[0])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("G");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_light[1]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_light[1])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("B");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_light[2]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_light[2])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
     });
 
@@ -287,15 +325,30 @@ fn show_rock_config(ui: &mut egui::Ui, c: &mut RockConfig) -> bool {
     ui.horizontal(|ui| {
         ui.label("R");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_dark[0]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_dark[0])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("G");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_dark[1]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_dark[1])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
         ui.label("B");
         ch |= ui
-            .add(egui::DragValue::new(&mut c.color_dark[2]).speed(0.005).range(0.0..=1.0).max_decimals(3))
+            .add(
+                egui::DragValue::new(&mut c.color_dark[2])
+                    .speed(0.005)
+                    .range(0.0..=1.0)
+                    .max_decimals(3),
+            )
             .changed();
     });
 

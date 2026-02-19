@@ -24,7 +24,7 @@ use bevy_symbios_texture::async_gen::{PendingTexture, TextureReady};
 use symbios_ground::splat::SplatMapper;
 
 use crate::core::{
-    config::CurrentHeightMap,
+    config::{CurrentHeightMap, TerrainConfig},
     material_config::{MaterialConfig, MaterialState, MaterialStatus, TerrainMaterialHandle},
 };
 
@@ -152,6 +152,7 @@ pub fn bake_and_apply_material(
     mut mat_state: ResMut<MaterialState>,
     mat_config: Res<MaterialConfig>,
     current_hm: Res<CurrentHeightMap>,
+    terrain_config: Res<TerrainConfig>,
     terrain_mat_handle: Option<Res<TerrainMaterialHandle>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
@@ -189,11 +190,12 @@ pub fn bake_and_apply_material(
     };
 
     // --- Splat weight map ---------------------------------------------------
+    let hs = terrain_config.height_scale;
     let mapper = SplatMapper::new([
-        mat_config.rules[0].to_splat_rule(),
-        mat_config.rules[1].to_splat_rule(),
-        mat_config.rules[2].to_splat_rule(),
-        mat_config.rules[3].to_splat_rule(),
+        mat_config.rules[0].to_splat_rule(hs),
+        mat_config.rules[1].to_splat_rule(hs),
+        mat_config.rules[2].to_splat_rule(hs),
+        mat_config.rules[3].to_splat_rule(hs),
     ]);
     let weight_map = mapper.generate(hm);
 
