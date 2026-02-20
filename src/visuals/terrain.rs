@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_symbios_ground::HeightMapMeshBuilder;
+use bevy_symbios_ground::{HeightMapMeshBuilder, NormalMethod};
 
 use crate::core::config::{CurrentHeightMap, DirtyMesh};
 use crate::core::material_config::TerrainMaterialHandle;
@@ -60,6 +60,7 @@ pub fn rebuild_terrain(
     // achieves this: u = world_x / world_extent ∈ [0, 1].
     let world_extent = (hm.width() - 1) as f32 * hm.scale();
     let mesh = HeightMapMeshBuilder::new()
+        .with_normal_method(NormalMethod::AreaWeighted)
         .with_uv_tile_size(world_extent)
         .build(hm);
 

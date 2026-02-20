@@ -199,10 +199,16 @@ pub fn bake_and_apply_material(
     ]);
     let weight_map = mapper.generate(hm);
 
-    let bake_w = weight_map.width as u32;
-    let bake_h = weight_map.height as u32;
+    // Bake at 2× the procedural texture size so each tile has adequate pixel
+    // density.  With the default tex_size=512 and tile_scale=8 this gives
+    // 128 px/tile (vs the previous 32 px/tile at heightmap resolution), which
+    // eliminates the stretched/plain-colour appearance caused by heavy GPU
+    // magnification of an under-resolved baked texture.
     let tex_size = mat_state.layer_tex_size as usize;
     let tile_scale = mat_config.tile_scale;
+    let bake_size = (mat_state.layer_tex_size * 2).min(2048);
+    let bake_w = bake_size;
+    let bake_h = bake_size;
 
     // --- CPU texture bake ---------------------------------------------------
     let n = (bake_w * bake_h) as usize;
@@ -223,10 +229,16 @@ pub fn bake_and_apply_material(
         mat_state.layer_normal[3].as_deref().unwrap(),
     ];
 
+    let wm_w = weight_map.width;
+    let wm_h = weight_map.height;
+
     for z in 0..bake_h as usize {
         for x in 0..bake_w as usize {
-            let pixel_idx = z * bake_w as usize + x;
-            let weights = weight_map.data[pixel_idx];
+            // Scale bake coordinates down to weight-map resolution (nearest-
+            // neighbour; splat weights are already smooth so no filtering needed).
+            let wm_x = (x * wm_w / bake_w as usize).min(wm_w.saturating_sub(1));
+            let wm_z = (z * wm_h / bake_h as usize).min(wm_h.saturating_sub(1));
+            let weights = weight_map.data[wm_z * wm_w + wm_x];
             let wf = [
                 weights[0] as f32 / 255.0,
                 weights[1] as f32 / 255.0,
@@ -237,11 +249,27 @@ pub fn bake_and_apply_material(
             // Tiled UV — wraps at texture boundaries.
             let u = (x as f32 / bake_w as f32 * tile_scale).fract();
             let v = (z as f32 / bake_h as f32 * tile_scale).fract();
-            let tx = (u * tex_size as f32) as usize % tex_size;
-            let ty = (v * tex_size as f32) as usize % tex_size;
-            let tex_pixel = (ty * tex_size + tx) * 4;
 
-            let out_pixel = pixel_idx * 4;
+            // Bilinear interpolation of the source texture eliminates the
+            // aliasing that point-sampling (stride >1) introduced.
+            let uf = u * tex_size as f32;
+            let vf = v * tex_size as f32;
+            let tx0 = uf as usize % tex_size;
+            let ty0 = vf as usize % tex_size;
+            let tx1 = (tx0 + 1) % tex_size;
+            let ty1 = (ty0 + 1) % tex_size;
+            let fx = uf.fract();
+            let fy = vf.fract();
+
+            let bilerp = |buf: &[u8], ch: usize| -> f32 {
+                let v00 = buf[(ty0 * tex_size + tx0) * 4 + ch] as f32;
+                let v10 = buf[(ty0 * tex_size + tx1) * 4 + ch] as f32;
+                let v01 = buf[(ty1 * tex_size + tx0) * 4 + ch] as f32;
+                let v11 = buf[(ty1 * tex_size + tx1) * 4 + ch] as f32;
+                (v00 + (v10 - v00) * fx) * (1.0 - fy) + (v01 + (v11 - v01) * fx) * fy
+            };
+
+            let out_pixel = (z * bake_w as usize + x) * 4;
 
             let (mut ra, mut ga, mut ba) = (0.0f32, 0.0f32, 0.0f32);
             let (mut rn, mut gn, mut bn) = (0.0f32, 0.0f32, 0.0f32);
@@ -251,13 +279,13 @@ pub fn bake_and_apply_material(
                 if w < 1e-5 {
                     continue;
                 }
-                ra += al[layer][tex_pixel] as f32 * w;
-                ga += al[layer][tex_pixel + 1] as f32 * w;
-                ba += al[layer][tex_pixel + 2] as f32 * w;
+                ra += bilerp(al[layer], 0) * w;
+                ga += bilerp(al[layer], 1) * w;
+                ba += bilerp(al[layer], 2) * w;
 
-                rn += nl[layer][tex_pixel] as f32 * w;
-                gn += nl[layer][tex_pixel + 1] as f32 * w;
-                bn += nl[layer][tex_pixel + 2] as f32 * w;
+                rn += bilerp(nl[layer], 0) * w;
+                gn += bilerp(nl[layer], 1) * w;
+                bn += bilerp(nl[layer], 2) * w;
             }
 
             out_albedo[out_pixel] = ra.round() as u8;
