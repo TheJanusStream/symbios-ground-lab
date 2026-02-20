@@ -100,22 +100,35 @@ pub fn start_texture_tasks(
 
     let sz = mat_config.texture_size;
 
-    commands.spawn((
-        PendingTexture::ground(mat_config.grass.clone(), sz, sz),
-        TextureLayerIndex(0),
-    ));
-    commands.spawn((
-        PendingTexture::ground(mat_config.dirt.clone(), sz, sz),
-        TextureLayerIndex(1),
-    ));
-    commands.spawn((
-        PendingTexture::rock(mat_config.rock.clone(), sz, sz),
-        TextureLayerIndex(2),
-    ));
-    commands.spawn((
-        PendingTexture::ground(mat_config.snow.clone(), sz, sz),
-        TextureLayerIndex(3),
-    ));
+    let e0 = commands
+        .spawn((
+            PendingTexture::ground(mat_config.grass.clone(), sz, sz),
+            TextureLayerIndex(0),
+        ))
+        .id();
+    let e1 = commands
+        .spawn((
+            PendingTexture::ground(mat_config.dirt.clone(), sz, sz),
+            TextureLayerIndex(1),
+        ))
+        .id();
+    let e2 = commands
+        .spawn((
+            PendingTexture::rock(mat_config.rock.clone(), sz, sz),
+            TextureLayerIndex(2),
+        ))
+        .id();
+    let e3 = commands
+        .spawn((
+            PendingTexture::ground(mat_config.snow.clone(), sz, sz),
+            TextureLayerIndex(3),
+        ))
+        .id();
+
+    // Record the IDs of the freshly-spawned tasks so that
+    // `collect_texture_results` can skip still-alive entities from the
+    // previous (now-despawned-but-deferred) generation.
+    mat_state.current_texture_entities = Some([e0, e1, e2, e3]);
 
     mat_state.textures_dirty = false;
 }
@@ -129,6 +142,17 @@ pub fn collect_texture_results(
     mut mat_state: ResMut<MaterialState>,
 ) {
     for (entity, layer_idx, ready) in &ready_textures {
+        // Skip entities that belong to a previous (cancelled) generation.
+        // Bevy's deferred despawn means those entities remain queryable for
+        // the rest of the frame they were despawned in, which would otherwise
+        // let stale TextureReady data overwrite layer_albedo and corrupt the
+        // status state machine.
+        if !mat_state
+            .current_texture_entities
+            .is_some_and(|ids| ids.contains(&entity))
+        {
+            continue;
+        }
         let idx = layer_idx.0;
         mat_state.layer_albedo[idx] = Some(ready.0.albedo.clone());
         mat_state.layer_normal[idx] = Some(ready.0.normal.clone());
@@ -225,23 +249,15 @@ pub fn apply_splat_material(
 
         mat.extension.weight_map = wm_handle;
 
-        mat.extension.layer_albedo_0 =
-            mat_state.layer_albedo[0].clone().unwrap_or_default();
-        mat.extension.layer_albedo_1 =
-            mat_state.layer_albedo[1].clone().unwrap_or_default();
-        mat.extension.layer_albedo_2 =
-            mat_state.layer_albedo[2].clone().unwrap_or_default();
-        mat.extension.layer_albedo_3 =
-            mat_state.layer_albedo[3].clone().unwrap_or_default();
+        mat.extension.layer_albedo_0 = mat_state.layer_albedo[0].clone().unwrap_or_default();
+        mat.extension.layer_albedo_1 = mat_state.layer_albedo[1].clone().unwrap_or_default();
+        mat.extension.layer_albedo_2 = mat_state.layer_albedo[2].clone().unwrap_or_default();
+        mat.extension.layer_albedo_3 = mat_state.layer_albedo[3].clone().unwrap_or_default();
 
-        mat.extension.layer_normal_0 =
-            mat_state.layer_normal[0].clone().unwrap_or_default();
-        mat.extension.layer_normal_1 =
-            mat_state.layer_normal[1].clone().unwrap_or_default();
-        mat.extension.layer_normal_2 =
-            mat_state.layer_normal[2].clone().unwrap_or_default();
-        mat.extension.layer_normal_3 =
-            mat_state.layer_normal[3].clone().unwrap_or_default();
+        mat.extension.layer_normal_0 = mat_state.layer_normal[0].clone().unwrap_or_default();
+        mat.extension.layer_normal_1 = mat_state.layer_normal[1].clone().unwrap_or_default();
+        mat.extension.layer_normal_2 = mat_state.layer_normal[2].clone().unwrap_or_default();
+        mat.extension.layer_normal_3 = mat_state.layer_normal[3].clone().unwrap_or_default();
 
         mat.extension.uniforms = SplatUniforms {
             tile_scale: mat_config.tile_scale,

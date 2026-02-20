@@ -3,7 +3,6 @@ use bevy_symbios_texture::ground::GroundConfig;
 use bevy_symbios_texture::rock::RockConfig;
 use symbios_ground::splat::SplatRule;
 
-
 /// Per-layer splat rule parameters (height/slope thresholds for a texture layer).
 #[derive(Clone, Debug)]
 pub struct SplatRuleParams {
@@ -164,6 +163,12 @@ pub struct MaterialState {
 
     /// Display status shown in the Material GUI.
     pub status: MaterialStatus,
+
+    /// Entity IDs of the four [`PendingTexture`] tasks spawned in the current
+    /// generation.  `collect_texture_results` uses this to skip entities that
+    /// were despawned-but-not-yet-removed (deferred commands) from a previous
+    /// run, preventing the stale-`TextureReady` race condition.
+    pub current_texture_entities: Option<[Entity; 4]>,
 }
 
 impl Default for MaterialState {
@@ -178,6 +183,7 @@ impl Default for MaterialState {
             status: MaterialStatus::Idle,
             texture_debounce_pending: false,
             texture_debounce_timer: Timer::from_seconds(0.4, TimerMode::Once),
+            current_texture_entities: None,
         }
     }
 }
@@ -196,4 +202,3 @@ pub enum MaterialStatus {
     GeneratingTextures,
     Ready,
 }
-

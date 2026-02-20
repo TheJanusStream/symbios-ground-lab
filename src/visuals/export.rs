@@ -61,10 +61,18 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     a.set_href(&url);
     a.set_download(filename);
     a.click();
-    // Do not revoke the blob URL synchronously: Firefox and Safari start the
-    // download asynchronously, so an immediate revoke destroys the URL before
-    // the browser has read the data. Blob URLs are released when the page
-    // unloads, which is acceptable for a single-page application.
+    // Revoke the blob URL after a 60-second delay. Revoking synchronously
+    // would destroy the URL before Firefox/Safari finish their async download
+    // initiation. A 60-second window is ample for any browser, and prevents
+    // unbounded memory growth from repeated large (100+ MB OBJ) exports.
+    let url_to_revoke = url.clone();
+    let cb = wasm_bindgen::closure::Closure::once(move || {
+        web_sys::Url::revoke_object_url(&url_to_revoke).ok();
+    });
+    window
+        .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 60_000)
+        .ok();
+    cb.forget();
     Ok(())
 }
 
@@ -132,6 +140,29 @@ pub fn poll_export_task(mut task: ResMut<ExportTask>, mut status: ResMut<ExportS
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use symbios_ground::HeightMap;
+
+    #[test]
+    fn obj_uv_no_nan_for_1x1_map() {
+        // A 1×1 heightmap has w-1 == 0; dividing by it previously produced NaN UVs.
+        let hm = HeightMap::new(1, 1, 1.0);
+        let obj = heightmap_to_obj(&hm);
+        for line in obj.lines() {
+            if let Some(coords) = line.strip_prefix("vt ") {
+                for token in coords.split_whitespace() {
+                    let v: f32 = token
+                        .parse()
+                        .expect("UV coordinate should be a valid float");
+                    assert!(v.is_finite(), "NaN/Inf UV in OBJ output: {line}");
+                }
+            }
+        }
+    }
+}
+
 fn heightmap_to_obj(hm: &HeightMap) -> String {
     let w = hm.width();
     let h = hm.height();
@@ -152,8 +183,16 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
     // UV coordinates
     for z in 0..h {
         for x in 0..w {
-            let u = x as f32 / (w - 1) as f32;
-            let v = z as f32 / (h - 1) as f32;
+            let u = if w > 1 {
+                x as f32 / (w - 1) as f32
+            } else {
+                0.0
+            };
+            let v = if h > 1 {
+                z as f32 / (h - 1) as f32
+            } else {
+                0.0
+            };
             out.push_str(&format!("vt {u:.6} {v:.6}\n"));
         }
     }

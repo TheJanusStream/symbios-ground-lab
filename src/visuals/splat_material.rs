@@ -95,7 +95,6 @@ pub struct SplatExtension {
     pub uniforms: SplatUniforms,
 }
 
-
 impl MaterialExtension for SplatExtension {
     fn fragment_shader() -> ShaderRef {
         SPLAT_SHADER_PATH.into()
