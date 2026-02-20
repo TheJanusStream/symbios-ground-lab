@@ -84,8 +84,8 @@ impl Default for TerrainConfig {
             evaporation_rate: 0.02,
             capacity_factor: 8.0,
 
-            thermal_enabled: false,
-            thermal_iterations: 50,
+            thermal_enabled: true,
+            thermal_iterations: 1,
             thermal_talus_angle: 0.05,
         }
     }

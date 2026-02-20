@@ -201,7 +201,7 @@ pub fn render_ui(
 
             // ── Thermal Erosion ───────────────────────────────────────────
             egui::CollapsingHeader::new("Thermal Erosion")
-                .default_open(false)
+                .default_open(true)
                 .show(ui, |ui| {
                     let mut changed = false;
                     changed |= checkbox(ui, &mut config.thermal_enabled, "Enable thermal erosion");
