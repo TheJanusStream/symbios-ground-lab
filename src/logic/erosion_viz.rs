@@ -119,7 +119,12 @@ pub fn step_erosion_viz(
 
             let new_px = drop.px + drop.dir_x;
             let new_pz = drop.pz + drop.dir_z;
-            if new_px < 0.0 || new_px >= (w - 1) as f32 || new_pz < 0.0 || new_pz >= (h - 1) as f32
+            if !new_px.is_finite()
+                || !new_pz.is_finite()
+                || new_px < 0.0
+                || new_px >= (w - 1) as f32
+                || new_pz < 0.0
+                || new_pz >= (h - 1) as f32
             {
                 alive = false;
                 break;
@@ -139,8 +144,11 @@ pub fn step_erosion_viz(
                 + nh11 * nfx * nfz;
 
             let delta_h = height_new - height_here;
-            let slope = (-delta_h).max(cfg.capacity_factor.recip());
-            let capacity = slope * drop.vel * drop.water * cfg.capacity_factor;
+            // Use a fixed min_slope (matches HydraulicErosion default) instead of
+            // capacity_factor.recip(), which would produce +Inf when capacity_factor==0
+            // and cascade into NaN throughout the droplet simulation.
+            let slope = (-delta_h).max(0.01_f32);
+            let capacity = (slope * drop.vel * drop.water * cfg.capacity_factor).max(0.0);
 
             if drop.sediment > capacity || delta_h > 0.0 {
                 let deposit = if delta_h > 0.0 {

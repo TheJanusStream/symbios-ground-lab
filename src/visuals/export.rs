@@ -61,7 +61,10 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     a.set_href(&url);
     a.set_download(filename);
     a.click();
-    let _ = web_sys::Url::revoke_object_url(&url);
+    // Do not revoke the blob URL synchronously: Firefox and Safari start the
+    // download asynchronously, so an immediate revoke destroys the URL before
+    // the browser has read the data. Blob URLs are released when the page
+    // unloads, which is acceptable for a single-page application.
     Ok(())
 }
 
