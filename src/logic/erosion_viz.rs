@@ -180,7 +180,7 @@ pub fn step_erosion_viz(
                 *v -= erode * w11;
             }
 
-            drop.vel = (drop.vel * drop.vel + delta_h * (-9.8)).abs().sqrt();
+            drop.vel = (drop.vel * drop.vel + delta_h * (-9.8)).max(0.0).sqrt();
             drop.water *= 1.0 - cfg.evaporation_rate;
             drop.px = new_px;
             drop.pz = new_pz;
@@ -201,11 +201,18 @@ pub fn step_erosion_viz(
     viz.active = still_alive;
     viz.completed += newly_completed;
 
-    // Publish snapshot for terrain mesh rebuild every Nth frame to avoid thrashing.
-    let snapshot = hm.clone();
     viz.heightmap = Some(hm);
-    current_hm.0 = Some(snapshot);
-    dirty_mesh.0 = true;
+
+    // Publish snapshot for terrain mesh rebuild every Nth frame to avoid thrashing.
+    viz.frame_counter += 1;
+    let should_publish = viz.frame_counter >= viz.publish_every_n_frames
+        || (viz.completed >= viz.total && viz.active.is_empty());
+    if should_publish {
+        viz.frame_counter = 0;
+        let snapshot = viz.heightmap.as_ref().unwrap().clone();
+        current_hm.0 = Some(snapshot);
+        dirty_mesh.0 = true;
+    }
 
     if viz.completed >= viz.total && viz.active.is_empty() {
         viz.enabled = false;

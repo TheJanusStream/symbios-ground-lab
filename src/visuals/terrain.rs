@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_symbios_ground::{HeightMapMeshBuilder, NormalMethod};
 
-use crate::core::config::{CurrentHeightMap, DirtyMesh};
+use crate::core::config::{CurrentHeightMap, DirtyFlags, DirtyMesh};
 use crate::visuals::splat_material::{SplatExtension, SplatMaterialHandle, SplatTerrainMaterial};
 
 /// Marker component for the primary terrain mesh entity.
@@ -19,7 +19,7 @@ pub fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SplatTerrainMaterial>>,
-    mut dirty: ResMut<DirtyMesh>,
+    mut dirty_flags: ResMut<DirtyFlags>,
 ) {
     let placeholder = meshes.add(
         Plane3d::default()
@@ -45,7 +45,7 @@ pub fn spawn_terrain(
     commands.insert_resource(SplatMaterialHandle(mat_handle));
 
     // Kick off the first generation immediately.
-    dirty.0 = true;
+    dirty_flags.terrain = true;
 }
 
 /// Rebuild the terrain mesh whenever a new heightmap has been generated.

@@ -61,12 +61,25 @@ pub fn detect_material_dirty(
 
 /// Spawns four async [`PendingTexture`] tasks (grass, dirt, rock, snow) when
 /// `mat_state.textures_dirty` is set.
+///
+/// If `texture_debounce_pending` is set (slider drag in progress), the timer
+/// is ticked each frame and `textures_dirty` is only set once it expires,
+/// preventing abandoned zombie tasks from saturating the thread pool.
 pub fn start_texture_tasks(
     mut commands: Commands,
     mat_config: Res<MaterialConfig>,
     mut mat_state: ResMut<MaterialState>,
     pending: Query<Entity, With<TextureLayerIndex>>,
+    time: Res<Time>,
 ) {
+    if mat_state.texture_debounce_pending {
+        mat_state.texture_debounce_timer.tick(time.delta());
+        if mat_state.texture_debounce_timer.just_finished() {
+            mat_state.texture_debounce_pending = false;
+            mat_state.textures_dirty = true;
+        }
+    }
+
     if !mat_state.textures_dirty {
         return;
     }

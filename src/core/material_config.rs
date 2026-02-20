@@ -157,6 +157,11 @@ pub struct MaterialState {
     /// rule change) without regenerating procedural textures.
     pub splat_dirty: bool,
 
+    /// Debounce state for texture regeneration: prevents a slider drag from
+    /// saturating the thread pool with abandoned generation tasks.
+    pub texture_debounce_pending: bool,
+    pub texture_debounce_timer: Timer,
+
     /// Display status shown in the Material GUI.
     pub status: MaterialStatus,
 }
@@ -171,6 +176,8 @@ impl Default for MaterialState {
             textures_dirty: true,
             splat_dirty: false,
             status: MaterialStatus::Idle,
+            texture_debounce_pending: false,
+            texture_debounce_timer: Timer::from_seconds(0.4, TimerMode::Once),
         }
     }
 }

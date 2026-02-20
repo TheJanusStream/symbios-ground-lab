@@ -163,6 +163,11 @@ pub struct ErosionVizState {
     pub steps_per_frame: u32,
     /// Drops spawned per frame.
     pub drops_per_frame: u32,
+    /// Publish the heightmap snapshot to `CurrentHeightMap` every N frames to
+    /// avoid triggering a full splat-map rebuild on every single frame.
+    pub publish_every_n_frames: u32,
+    /// Frame counter for the publish throttle.
+    pub frame_counter: u32,
     /// Cached config copy for erosion parameters.
     pub config: super::config::TerrainConfig,
 }
@@ -179,6 +184,8 @@ impl Default for ErosionVizState {
             total: 0,
             steps_per_frame: 8,
             drops_per_frame: 32,
+            publish_every_n_frames: 6,
+            frame_counter: 0,
             config: TerrainConfig::default(),
         }
     }

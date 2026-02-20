@@ -150,8 +150,10 @@ pub fn render_material_ui(
     if any_changed {
         // Notify Bevy that MaterialConfig was intentionally modified.
         config.set_changed();
-        // Kick the material pipeline — full texture regeneration + rebake.
-        mat_state.textures_dirty = true;
+        // Start debounce instead of directly setting textures_dirty, so that
+        // continuous slider drags don't saturate the thread pool with abandoned tasks.
+        mat_state.texture_debounce_timer.reset();
+        mat_state.texture_debounce_pending = true;
         mat_state.splat_dirty = true;
     }
 }
