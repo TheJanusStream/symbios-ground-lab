@@ -73,7 +73,7 @@ pub fn render_material_ui(
                                             cfg.texture_size, cfg.texture_size
                                         ))
                                         .show_ui(ui, |ui| {
-                                            for &s in &[256u32, 512, 1024] {
+                                            for &s in &[256u32, 512, 1024, 2048, 4096] {
                                                 if ui
                                                     .selectable_label(
                                                         cfg.texture_size == s,

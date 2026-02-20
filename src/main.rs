@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{pbr::MaterialPlugin, prelude::*};
 use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use bevy_symbios_texture::SymbiosTexturePlugin;
@@ -8,6 +8,7 @@ use symbios_ground_lab::core::config::{
     GenerationTask, TerrainConfig, TerrainDebounce,
 };
 use symbios_ground_lab::core::material_config::{MaterialConfig, MaterialState};
+use symbios_ground_lab::visuals::splat_material::SplatTerrainMaterial;
 use symbios_ground_lab::{logic, ui, visuals};
 
 fn main() {
@@ -23,6 +24,7 @@ fn main() {
             EguiPlugin::default(),
             PanOrbitCameraPlugin,
             SymbiosTexturePlugin,
+            MaterialPlugin::<SplatTerrainMaterial>::default(),
         ))
         // ── Resources ────────────────────────────────────────────────────
         .init_resource::<TerrainConfig>()
@@ -60,7 +62,7 @@ fn main() {
                 visuals::material::detect_material_dirty,
                 visuals::material::start_texture_tasks,
                 visuals::material::collect_texture_results,
-                visuals::material::bake_and_apply_material,
+                visuals::material::apply_splat_material,
             )
                 .chain(),
         )

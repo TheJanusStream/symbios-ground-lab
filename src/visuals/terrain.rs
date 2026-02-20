@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_symbios_ground::{HeightMapMeshBuilder, NormalMethod};
 
 use crate::core::config::{CurrentHeightMap, DirtyMesh};
-use crate::core::material_config::TerrainMaterialHandle;
+use crate::visuals::splat_material::{SplatExtension, SplatMaterialHandle, SplatTerrainMaterial};
 
 /// Marker component for the primary terrain mesh entity.
 #[derive(Component)]
@@ -10,12 +10,15 @@ pub struct TerrainMesh;
 
 /// Spawn a placeholder flat plane until the first generation completes.
 ///
-/// Also inserts a [`TerrainMaterialHandle`] resource so the material systems
-/// can update the terrain's [`StandardMaterial`] at runtime.
+/// The terrain uses [`SplatTerrainMaterial`] from the start with
+/// `extension.uniforms.enabled = 0` so the base StandardMaterial green colour
+/// shows through while procedural textures are still generating.  The
+/// [`SplatMaterialHandle`] resource is inserted so the material pipeline can
+/// update the extension later.
 pub fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<SplatTerrainMaterial>>,
     mut dirty: ResMut<DirtyMesh>,
 ) {
     let placeholder = meshes.add(
@@ -25,10 +28,13 @@ pub fn spawn_terrain(
             .subdivisions(1)
             .build(),
     );
-    let mat_handle = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.35, 0.55, 0.25),
-        perceptual_roughness: 0.9,
-        ..default()
+    let mat_handle = materials.add(SplatTerrainMaterial {
+        base: StandardMaterial {
+            base_color: Color::srgb(0.35, 0.55, 0.25),
+            perceptual_roughness: 0.9,
+            ..default()
+        },
+        extension: SplatExtension::default(), // enabled = 0, all handles invalid
     });
     commands.spawn((
         Mesh3d(placeholder),
@@ -36,13 +42,16 @@ pub fn spawn_terrain(
         Transform::default(),
         TerrainMesh,
     ));
-    commands.insert_resource(TerrainMaterialHandle(mat_handle));
+    commands.insert_resource(SplatMaterialHandle(mat_handle));
 
     // Kick off the first generation immediately.
     dirty.0 = true;
 }
 
 /// Rebuild the terrain mesh whenever a new heightmap has been generated.
+///
+/// Tangents are generated after each rebuild so the splat fragment shader can
+/// use the Mikktspace TBN frame for normal-map blending.
 pub fn rebuild_terrain(
     mut query: Query<(&mut Mesh3d, &mut Transform), With<TerrainMesh>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -54,27 +63,28 @@ pub fn rebuild_terrain(
     }
     let Some(hm) = &current_hm.0 else { return };
 
-    // UVs must span [0, 1] across the whole terrain so the baked splat
-    // texture (one pixel per heightmap cell, full-terrain coverage) maps
-    // exactly once over the mesh.  Using the world extent as the tile size
-    // achieves this: u = world_x / world_extent ∈ [0, 1].
+    // UVs must span [0, 1] across the whole terrain so the splat weight map
+    // (one pixel per heightmap cell, full-terrain coverage) maps exactly once
+    // over the mesh.
     let world_extent = (hm.width() - 1) as f32 * hm.scale();
-    let mesh = HeightMapMeshBuilder::new()
+    let mut mesh = HeightMapMeshBuilder::new()
         .with_normal_method(NormalMethod::AreaWeighted)
         .with_uv_tile_size(world_extent)
         .build(hm);
 
+    // Generate per-vertex tangents so the fragment shader can build the TBN
+    // frame for tangent-space normal-map blending.
+    mesh.generate_tangents()
+        .expect("terrain mesh tangent generation failed");
+
     for (mut mesh3d, mut transform) in &mut query {
         // Update the existing asset buffer in-place so the old allocation is
-        // reused and never orphaned.  Only fall back to a new handle if the
-        // asset has somehow been removed from the store already.
+        // reused and never orphaned.
         if let Some(existing) = meshes.get_mut(&mesh3d.0) {
             *existing = mesh.clone();
         } else {
             mesh3d.0 = meshes.add(mesh.clone());
         }
-        // Mesh vertices are already in world space [0, world_w] × [0, world_d];
-        // no translation needed.
         transform.translation = Vec3::ZERO;
     }
 

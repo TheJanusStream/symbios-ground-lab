@@ -8,12 +8,13 @@
 //!    splat channel) when `textures_dirty` is set.
 //! 3. [`bevy_symbios_texture::SymbiosTexturePlugin`] polls those tasks and
 //!    attaches [`TextureReady`] when generation completes.
-//! 4. [`collect_texture_results`] harvests the raw pixel bytes, stores them
-//!    in [`MaterialState`], then removes the temporary GPU images.
-//! 5. [`bake_and_apply_material`] runs once `splat_dirty` is set and all
-//!    layer bytes are available: it generates a [`SplatMapper`] weight map,
-//!    blends the four textures on the CPU, uploads two baked images (albedo +
-//!    normal), and applies them to the terrain's [`StandardMaterial`].
+//! 4. [`collect_texture_results`] stores the GPU image handles from each
+//!    completed layer into [`MaterialState`], then despawns the temporary
+//!    entity.  No bytes are copied to the CPU — the images stay on the GPU.
+//! 5. [`apply_splat_material`] runs once `splat_dirty` is set and all layer
+//!    handles are available: it generates a [`SplatMapper`] weight map,
+//!    uploads it as a GPU texture, and updates the terrain's
+//!    [`SplatTerrainMaterial`] extension with all nine texture handles.
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -25,8 +26,9 @@ use symbios_ground::splat::SplatMapper;
 
 use crate::core::{
     config::{CurrentHeightMap, TerrainConfig},
-    material_config::{MaterialConfig, MaterialState, MaterialStatus, TerrainMaterialHandle},
+    material_config::{MaterialConfig, MaterialState, MaterialStatus},
 };
+use crate::visuals::splat_material::{SplatMaterialHandle, SplatUniforms};
 
 // ---------------------------------------------------------------------------
 // Marker component
@@ -40,8 +42,8 @@ pub struct TextureLayerIndex(pub usize);
 // Systems
 // ---------------------------------------------------------------------------
 
-/// Watches [`CurrentHeightMap`] for changes; sets `splat_dirty` so the bake
-/// step runs with fresh weights.
+/// Watches [`CurrentHeightMap`] for changes; sets `splat_dirty` so the
+/// weight map is regenerated with fresh data.
 ///
 /// Texture-dirty is set explicitly by the UI (via [`MaterialState`]) when the
 /// user actually modifies a texture parameter, avoiding the Bevy
@@ -78,10 +80,9 @@ pub fn start_texture_tasks(
         commands.entity(entity).despawn();
     }
 
-    // Clear accumulated layer data.
+    // Clear accumulated layer handles.
     mat_state.layer_albedo = [None, None, None, None];
     mat_state.layer_normal = [None, None, None, None];
-    mat_state.layer_tex_size = mat_config.texture_size;
     mat_state.status = MaterialStatus::GeneratingTextures;
 
     let sz = mat_config.texture_size;
@@ -106,74 +107,56 @@ pub fn start_texture_tasks(
     mat_state.textures_dirty = false;
 }
 
-/// Harvests completed [`TextureReady`] results: clones raw pixel bytes into
-/// [`MaterialState`], removes the temporary GPU image assets, and despawns
-/// the layer entity. When all four layers are ready, `splat_dirty` is set.
+/// Harvests completed [`TextureReady`] results: stores the GPU image handles
+/// directly in [`MaterialState`] (no CPU copy), then despawns the layer
+/// entity.  When all four layers are ready, `splat_dirty` is set.
 pub fn collect_texture_results(
     mut commands: Commands,
     ready_textures: Query<(Entity, &TextureLayerIndex, &TextureReady)>,
-    images: Res<Assets<Image>>,
     mut mat_state: ResMut<MaterialState>,
 ) {
     for (entity, layer_idx, ready) in &ready_textures {
         let idx = layer_idx.0;
-
-        // Clone the raw bytes before we do anything else.
-        let albedo_bytes = images
-            .get(&ready.0.albedo)
-            .and_then(|img| img.data.as_deref())
-            .map(|b| b.to_vec());
-
-        let normal_bytes = images
-            .get(&ready.0.normal)
-            .and_then(|img| img.data.as_deref())
-            .map(|b| b.to_vec());
-
-        if let (Some(a), Some(n)) = (albedo_bytes, normal_bytes) {
-            mat_state.layer_albedo[idx] = Some(a);
-            mat_state.layer_normal[idx] = Some(n);
-        } else {
-            bevy::log::error!("Texture data unavailable for layer {idx} after generation");
-        }
-
+        mat_state.layer_albedo[idx] = Some(ready.0.albedo.clone());
+        mat_state.layer_normal[idx] = Some(ready.0.normal.clone());
         commands.entity(entity).despawn();
     }
 
-    // Once all layers are populated, trigger baking.
+    // Once all layers are populated, trigger weight-map generation.
     if mat_state.all_layers_ready() && mat_state.status == MaterialStatus::GeneratingTextures {
         mat_state.splat_dirty = true;
+        mat_state.status = MaterialStatus::Idle;
     }
 }
 
-/// Generates the [`SplatMapper`] weight map from the current heightmap, blends
-/// the four procedural textures on the CPU, and uploads the result as a pair
-/// of baked images (albedo + normal map) applied to the terrain material.
-pub fn bake_and_apply_material(
+/// Generates the [`SplatMapper`] weight map from the current heightmap,
+/// uploads it as a GPU texture, and updates the terrain's
+/// [`SplatTerrainMaterial`] with all layer handles so the fragment shader
+/// can blend them per-pixel.
+pub fn apply_splat_material(
     mut mat_state: ResMut<MaterialState>,
     mat_config: Res<MaterialConfig>,
     current_hm: Res<CurrentHeightMap>,
     terrain_config: Res<TerrainConfig>,
-    terrain_mat_handle: Option<Res<TerrainMaterialHandle>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    splat_mat_handle: Option<Res<SplatMaterialHandle>>,
+    mut materials: ResMut<Assets<crate::visuals::splat_material::SplatTerrainMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     if !mat_state.splat_dirty {
         return;
     }
 
-    // Disabled: clear any previously baked textures and reset the material.
+    let Some(splat_handle) = &splat_mat_handle else {
+        return;
+    };
+
+    // Disabled: reset extension to passthrough and use the base StandardMaterial
+    // fallback colour (green grassland).
     if !mat_config.enabled {
         mat_state.splat_dirty = false;
-        if let (Some(handle), Some(mat)) = (
-            terrain_mat_handle.as_ref(),
-            terrain_mat_handle
-                .as_ref()
-                .and_then(|h| materials.get_mut(&h.0)),
-        ) {
-            let _ = handle; // keep the borrow alive
-            mat.base_color = Color::srgb(0.35, 0.55, 0.25);
-            mat.base_color_texture = None;
-            mat.normal_map_texture = None;
+        if let Some(mat) = materials.get_mut(&splat_handle.0) {
+            mat.base.base_color = Color::srgb(0.35, 0.55, 0.25);
+            mat.extension.uniforms.enabled = 0;
         }
         mat_state.status = MaterialStatus::Idle;
         return;
@@ -183,9 +166,6 @@ pub fn bake_and_apply_material(
         return;
     }
     let Some(hm) = &current_hm.0 else {
-        return;
-    };
-    let Some(terrain_handle) = &terrain_mat_handle else {
         return;
     };
 
@@ -199,159 +179,65 @@ pub fn bake_and_apply_material(
     ]);
     let weight_map = mapper.generate(hm);
 
-    // Bake at 2× the procedural texture size so each tile has adequate pixel
-    // density.  With the default tex_size=512 and tile_scale=8 this gives
-    // 128 px/tile (vs the previous 32 px/tile at heightmap resolution), which
-    // eliminates the stretched/plain-colour appearance caused by heavy GPU
-    // magnification of an under-resolved baked texture.
-    let tex_size = mat_state.layer_tex_size as usize;
-    let tile_scale = mat_config.tile_scale;
-    let bake_size = (mat_state.layer_tex_size * 2).min(2048);
-    let bake_w = bake_size;
-    let bake_h = bake_size;
+    // Flatten [u8; 4] per pixel into a contiguous byte slice.
+    let wm_bytes: Vec<u8> = weight_map
+        .data
+        .iter()
+        .flat_map(|p| p.iter().copied())
+        .collect();
 
-    // --- CPU texture bake ---------------------------------------------------
-    let n = (bake_w * bake_h) as usize;
-    let mut out_albedo = vec![0u8; n * 4];
-    let mut out_normal = vec![0u8; n * 4];
-
-    // Extract raw slices (all layers are present; checked by all_layers_ready).
-    let al: [&[u8]; 4] = [
-        mat_state.layer_albedo[0].as_deref().unwrap(),
-        mat_state.layer_albedo[1].as_deref().unwrap(),
-        mat_state.layer_albedo[2].as_deref().unwrap(),
-        mat_state.layer_albedo[3].as_deref().unwrap(),
-    ];
-    let nl: [&[u8]; 4] = [
-        mat_state.layer_normal[0].as_deref().unwrap(),
-        mat_state.layer_normal[1].as_deref().unwrap(),
-        mat_state.layer_normal[2].as_deref().unwrap(),
-        mat_state.layer_normal[3].as_deref().unwrap(),
-    ];
-
-    let wm_w = weight_map.width;
-    let wm_h = weight_map.height;
-
-    for z in 0..bake_h as usize {
-        for x in 0..bake_w as usize {
-            // Scale bake coordinates down to weight-map resolution (nearest-
-            // neighbour; splat weights are already smooth so no filtering needed).
-            let wm_x = (x * wm_w / bake_w as usize).min(wm_w.saturating_sub(1));
-            let wm_z = (z * wm_h / bake_h as usize).min(wm_h.saturating_sub(1));
-            let weights = weight_map.data[wm_z * wm_w + wm_x];
-            let wf = [
-                weights[0] as f32 / 255.0,
-                weights[1] as f32 / 255.0,
-                weights[2] as f32 / 255.0,
-                weights[3] as f32 / 255.0,
-            ];
-
-            // Tiled UV — wraps at texture boundaries.
-            let u = (x as f32 / bake_w as f32 * tile_scale).fract();
-            let v = (z as f32 / bake_h as f32 * tile_scale).fract();
-
-            // Bilinear interpolation of the source texture eliminates the
-            // aliasing that point-sampling (stride >1) introduced.
-            let uf = u * tex_size as f32;
-            let vf = v * tex_size as f32;
-            let tx0 = uf as usize % tex_size;
-            let ty0 = vf as usize % tex_size;
-            let tx1 = (tx0 + 1) % tex_size;
-            let ty1 = (ty0 + 1) % tex_size;
-            let fx = uf.fract();
-            let fy = vf.fract();
-
-            let bilerp = |buf: &[u8], ch: usize| -> f32 {
-                let v00 = buf[(ty0 * tex_size + tx0) * 4 + ch] as f32;
-                let v10 = buf[(ty0 * tex_size + tx1) * 4 + ch] as f32;
-                let v01 = buf[(ty1 * tex_size + tx0) * 4 + ch] as f32;
-                let v11 = buf[(ty1 * tex_size + tx1) * 4 + ch] as f32;
-                (v00 + (v10 - v00) * fx) * (1.0 - fy) + (v01 + (v11 - v01) * fx) * fy
-            };
-
-            let out_pixel = (z * bake_w as usize + x) * 4;
-
-            let (mut ra, mut ga, mut ba) = (0.0f32, 0.0f32, 0.0f32);
-            let (mut rn, mut gn, mut bn) = (0.0f32, 0.0f32, 0.0f32);
-
-            for layer in 0..4usize {
-                let w = wf[layer];
-                if w < 1e-5 {
-                    continue;
-                }
-                ra += bilerp(al[layer], 0) * w;
-                ga += bilerp(al[layer], 1) * w;
-                ba += bilerp(al[layer], 2) * w;
-
-                rn += bilerp(nl[layer], 0) * w;
-                gn += bilerp(nl[layer], 1) * w;
-                bn += bilerp(nl[layer], 2) * w;
-            }
-
-            out_albedo[out_pixel] = ra.round() as u8;
-            out_albedo[out_pixel + 1] = ga.round() as u8;
-            out_albedo[out_pixel + 2] = ba.round() as u8;
-            out_albedo[out_pixel + 3] = 255;
-
-            out_normal[out_pixel] = rn.round() as u8;
-            out_normal[out_pixel + 1] = gn.round() as u8;
-            out_normal[out_pixel + 2] = bn.round() as u8;
-            out_normal[out_pixel + 3] = 255;
-        }
-    }
-
-    // --- Upload to GPU ------------------------------------------------------
-    // Remove old baked images before adding new ones.
-    if let Some(old) = mat_state.baked_albedo.take() {
-        images.remove(old.id());
-    }
-    if let Some(old) = mat_state.baked_normal.take() {
+    // Remove the previous weight map from the asset store.
+    if let Some(old) = mat_state.weight_map.take() {
         images.remove(old.id());
     }
 
-    let albedo_handle = images.add(make_baked_image(
-        out_albedo,
-        bake_w,
-        bake_h,
-        TextureFormat::Rgba8UnormSrgb,
-    ));
-    let normal_handle = images.add(make_baked_image(
-        out_normal,
-        bake_w,
-        bake_h,
+    let wm_handle = images.add(Image::new(
+        Extent3d {
+            width: weight_map.width as u32,
+            height: weight_map.height as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        wm_bytes,
         TextureFormat::Rgba8Unorm,
+        RenderAssetUsages::RENDER_WORLD,
     ));
+    mat_state.weight_map = Some(wm_handle.clone());
 
-    mat_state.baked_albedo = Some(albedo_handle.clone());
-    mat_state.baked_normal = Some(normal_handle.clone());
+    // --- Update the SplatExtension on the terrain material ------------------
+    if let Some(mat) = materials.get_mut(&splat_handle.0) {
+        mat.base.base_color = Color::WHITE;
+        mat.base.perceptual_roughness = 0.85;
+        mat.base.metallic = 0.0;
 
-    // Apply to terrain StandardMaterial.
-    if let Some(mat) = materials.get_mut(&terrain_handle.0) {
-        mat.base_color = Color::WHITE;
-        mat.base_color_texture = Some(albedo_handle);
-        mat.normal_map_texture = Some(normal_handle);
-        mat.perceptual_roughness = 0.85;
-        mat.metallic = 0.0;
+        mat.extension.weight_map = wm_handle;
+
+        mat.extension.layer_albedo_0 =
+            mat_state.layer_albedo[0].clone().unwrap_or_default();
+        mat.extension.layer_albedo_1 =
+            mat_state.layer_albedo[1].clone().unwrap_or_default();
+        mat.extension.layer_albedo_2 =
+            mat_state.layer_albedo[2].clone().unwrap_or_default();
+        mat.extension.layer_albedo_3 =
+            mat_state.layer_albedo[3].clone().unwrap_or_default();
+
+        mat.extension.layer_normal_0 =
+            mat_state.layer_normal[0].clone().unwrap_or_default();
+        mat.extension.layer_normal_1 =
+            mat_state.layer_normal[1].clone().unwrap_or_default();
+        mat.extension.layer_normal_2 =
+            mat_state.layer_normal[2].clone().unwrap_or_default();
+        mat.extension.layer_normal_3 =
+            mat_state.layer_normal[3].clone().unwrap_or_default();
+
+        mat.extension.uniforms = SplatUniforms {
+            tile_scale: mat_config.tile_scale,
+            enabled: 1,
+            _pad_a: 0,
+            _pad_b: 0,
+        };
     }
 
     mat_state.splat_dirty = false;
     mat_state.status = MaterialStatus::Ready;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn make_baked_image(data: Vec<u8>, width: u32, height: u32, format: TextureFormat) -> Image {
-    Image::new(
-        Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        data,
-        format,
-        RenderAssetUsages::RENDER_WORLD,
-    )
 }

@@ -50,7 +50,7 @@ pub fn render_ui(
                         egui::ComboBox::from_id_salt("grid_size")
                             .selected_text(format!("{}×{}", config.grid_size, config.grid_size))
                             .show_ui(ui, |ui| {
-                                for &s in &[64u32, 128, 256, 512] {
+                                for &s in &[64u32, 128, 256, 512, 1024, 2048] {
                                     if ui
                                         .selectable_label(config.grid_size == s, format!("{s}×{s}"))
                                         .clicked()

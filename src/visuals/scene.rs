@@ -1,3 +1,5 @@
+use bevy::color::palettes::css::WHITE;
+use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy_panorbit_camera::PanOrbitCamera;
 
@@ -5,7 +7,7 @@ pub fn setup_scene(mut commands: Commands) {
     // Directional light (warm sun from the upper-right)
     commands.spawn((
         DirectionalLight {
-            illuminance: 10_000.0,
+            illuminance: 5000.0,
             shadows_enabled: true,
             color: Color::srgb(1.0, 0.96, 0.88),
             ..default()
@@ -15,6 +17,13 @@ pub fn setup_scene(mut commands: Commands) {
                 .mul_quat(Quat::from_rotation_y(-std::f32::consts::FRAC_PI_6)),
         ),
     ));
+
+    // ambient light
+    commands.insert_resource(GlobalAmbientLight {
+        color: WHITE.into(),
+        brightness: 300.0,
+        ..default()
+    });
 
     // Camera – orbit centred on the terrain, tilted 30° down
     commands.spawn((
@@ -28,5 +37,6 @@ pub fn setup_scene(mut commands: Commands) {
             ..default()
         },
         Camera3d::default(),
+        Bloom::NATURAL, // Enable Bloom
     ));
 }

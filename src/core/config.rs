@@ -59,7 +59,7 @@ pub struct TerrainConfig {
 impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
-            grid_size: 256,
+            grid_size: 512,
             cell_scale: 1.0,
             height_scale: 40.0,
 

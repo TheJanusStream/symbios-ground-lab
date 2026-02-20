@@ -3,6 +3,7 @@ use bevy_symbios_texture::ground::GroundConfig;
 use bevy_symbios_texture::rock::RockConfig;
 use symbios_ground::splat::SplatRule;
 
+
 /// Per-layer splat rule parameters (height/slope thresholds for a texture layer).
 #[derive(Clone, Debug)]
 pub struct SplatRuleParams {
@@ -84,8 +85,8 @@ impl Default for MaterialConfig {
 
         Self {
             enabled: true,
-            texture_size: 512,
-            tile_scale: 8.0,
+            texture_size: 1024,
+            tile_scale: 64.0,
             rules: [
                 // R — Grass: low altitude, gentle slope
                 SplatRuleParams {
@@ -98,7 +99,7 @@ impl Default for MaterialConfig {
                 // G — Dirt: mid altitude, any slope
                 SplatRuleParams {
                     height_min: 0.30,
-                    height_max: 0.65,
+                    height_max: 1.0,
                     slope_min: 0.0,
                     slope_max: 0.60,
                     sharpness: 2.0,
@@ -132,21 +133,22 @@ impl Default for MaterialConfig {
 // Runtime state
 // ---------------------------------------------------------------------------
 
-/// Tracks progress of the async texture generation → CPU bake → GPU upload pipeline.
+/// Tracks progress of the async texture generation → GPU upload pipeline.
+///
+/// The previous CPU-bake step has been replaced by a fragment-shader approach:
+/// generated textures are kept as GPU image handles and passed directly to the
+/// `SplatExtension` material.
 #[derive(Resource)]
 pub struct MaterialState {
-    /// Raw albedo pixels (RGBA8 sRGB) for each of the 4 layers, filled in as
-    /// async tasks complete.
-    pub layer_albedo: [Option<Vec<u8>>; 4],
-    /// Raw normal pixels (RGBA8 Unorm) for each layer.
-    pub layer_normal: [Option<Vec<u8>>; 4],
-    /// Side length of each layer texture (all layers share the same size).
-    pub layer_tex_size: u32,
+    /// GPU handle for the albedo texture of each layer (filled as async tasks
+    /// complete; `None` until the layer is ready).
+    pub layer_albedo: [Option<Handle<Image>>; 4],
+    /// GPU handle for the normal map of each layer.
+    pub layer_normal: [Option<Handle<Image>>; 4],
 
-    /// Handle to the baked albedo image currently applied to the terrain.
-    pub baked_albedo: Option<Handle<Image>>,
-    /// Handle to the baked normal image currently applied to the terrain.
-    pub baked_normal: Option<Handle<Image>>,
+    /// Handle to the splat weight map currently bound to the terrain material.
+    /// `None` until the first splat application completes.
+    pub weight_map: Option<Handle<Image>>,
 
     /// `true` when procedural texture parameters changed and textures must be
     /// re-generated from scratch.
@@ -164,9 +166,7 @@ impl Default for MaterialState {
         Self {
             layer_albedo: [None, None, None, None],
             layer_normal: [None, None, None, None],
-            layer_tex_size: 0,
-            baked_albedo: None,
-            baked_normal: None,
+            weight_map: None,
             // Start dirty so textures are generated on the first frame.
             textures_dirty: true,
             splat_dirty: false,
@@ -178,6 +178,7 @@ impl Default for MaterialState {
 impl MaterialState {
     pub fn all_layers_ready(&self) -> bool {
         self.layer_albedo.iter().all(|d| d.is_some())
+            && self.layer_normal.iter().all(|d| d.is_some())
     }
 }
 
@@ -189,7 +190,3 @@ pub enum MaterialStatus {
     Ready,
 }
 
-/// Stores the terrain's `StandardMaterial` handle so the material systems can
-/// update textures without querying the mesh entity every frame.
-#[derive(Resource)]
-pub struct TerrainMaterialHandle(pub Handle<StandardMaterial>);
