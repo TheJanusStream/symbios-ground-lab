@@ -282,7 +282,9 @@ pub fn render_ui(
 
                 if ui
                     .add_enabled(
-                        !is_generating && !viz_active && !viz_initializing
+                        !is_generating
+                            && !viz_active
+                            && !viz_initializing
                             && config.erosion_enabled,
                         egui::Button::new("Visualise Erosion"),
                     )
@@ -325,11 +327,7 @@ pub fn render_ui(
                                 .clicked()
                                 && let Some(hm) = &current_hm.0
                             {
-                                spawn_png_export(
-                                    hm.clone(),
-                                    &mut export_task,
-                                    &mut export_status,
-                                );
+                                spawn_png_export(hm.clone(), &mut export_task, &mut export_status);
                             }
                             if ui
                                 .add_enabled(!is_exporting, egui::Button::new("OBJ mesh"))

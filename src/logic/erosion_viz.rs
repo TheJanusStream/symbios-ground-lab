@@ -38,7 +38,9 @@ pub fn start_erosion_viz(config: &TerrainConfig, state: &mut ErosionVizState) {
 /// Poll the async base-heightmap task spawned by `start_erosion_viz`.
 /// When it completes, store the result and enable the visualisation.
 pub fn poll_viz_init(mut viz: ResMut<ErosionVizState>) {
-    let Some(ref mut t) = viz.init_task else { return };
+    let Some(ref mut t) = viz.init_task else {
+        return;
+    };
     if let Some(hm) = future::block_on(future::poll_once(t)) {
         viz.heightmap = Some(hm);
         viz.init_task = None;

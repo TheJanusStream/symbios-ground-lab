@@ -239,66 +239,14 @@ fn show_ground_config(ui: &mut egui::Ui, c: &mut GroundConfig) -> bool {
     ch |= usize_slider(ui, &mut c.micro_octaves, "Micro octaves", 1..=6);
     ch |= f64_slider(ui, &mut c.micro_weight, "Micro weight", 0.0..=1.0);
 
-    ui.label("Color dry (linear RGB)");
     ui.horizontal(|ui| {
-        ui.label("R");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_dry[0])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("G");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_dry[1])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("B");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_dry[2])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
+        ui.label("Color dry");
+        ch |= ui.color_edit_button_rgb(&mut c.color_dry).changed();
     });
 
-    ui.label("Color moist (linear RGB)");
     ui.horizontal(|ui| {
-        ui.label("R");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_moist[0])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("G");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_moist[1])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("B");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_moist[2])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
+        ui.label("Color moist");
+        ch |= ui.color_edit_button_rgb(&mut c.color_moist).changed();
     });
 
     ch |= f32_slider(ui, &mut c.normal_strength, "Normal strength", 0.0..=8.0);
@@ -314,66 +262,14 @@ fn show_rock_config(ui: &mut egui::Ui, c: &mut RockConfig) -> bool {
     ch |= usize_slider(ui, &mut c.octaves, "Octaves", 1..=12);
     ch |= f64_slider(ui, &mut c.attenuation, "Attenuation", 0.5..=6.0);
 
-    ui.label("Color light (linear RGB)");
     ui.horizontal(|ui| {
-        ui.label("R");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_light[0])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("G");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_light[1])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("B");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_light[2])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
+        ui.label("Color gaps");
+        ch |= ui.color_edit_button_rgb(&mut c.color_light).changed();
     });
 
-    ui.label("Color dark (linear RGB)");
     ui.horizontal(|ui| {
-        ui.label("R");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_dark[0])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("G");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_dark[1])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
-        ui.label("B");
-        ch |= ui
-            .add(
-                egui::DragValue::new(&mut c.color_dark[2])
-                    .speed(0.005)
-                    .range(0.0..=1.0)
-                    .max_decimals(3),
-            )
-            .changed();
+        ui.label("Color stone");
+        ch |= ui.color_edit_button_rgb(&mut c.color_dark).changed();
     });
 
     ch |= f32_slider(ui, &mut c.normal_strength, "Normal strength", 0.0..=8.0);

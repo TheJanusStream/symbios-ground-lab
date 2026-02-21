@@ -64,7 +64,11 @@ pub fn detect_material_dirty(
     // Skip during active erosion viz — allow through only on the final frame
     // when viz.enabled has just been set to false (step_erosion_viz runs
     // earlier in the same .chain() so the flag is already updated).
-    if current_hm.is_changed() && current_hm.0.is_some() && !mat_state.textures_dirty && !viz.enabled {
+    if current_hm.is_changed()
+        && current_hm.0.is_some()
+        && !mat_state.textures_dirty
+        && !viz.enabled
+    {
         mat_state.splat_dirty = true;
     }
 }
@@ -223,11 +227,7 @@ pub fn apply_splat_material(
     // back to the near-zero denominator, producing pitch-black voids at the
     // highest peaks.  Clamp the scale to the actual maximum so the full [0, 1]
     // normalised rule range always covers the full terrain.
-    let actual_max = hm
-        .data()
-        .iter()
-        .cloned()
-        .fold(f32::NEG_INFINITY, f32::max);
+    let actual_max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let hs = actual_max.max(terrain_config.height_scale);
     let mapper = SplatMapper::new([
         mat_config.rules[0].to_splat_rule(hs),
