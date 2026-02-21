@@ -82,12 +82,53 @@ struct SplatUniforms {
     tile_scale: f32,
     /// Non-zero enables splat blending; zero passes through the base material.
     enabled: u32,
-    /// Explicit padding to match the 16-byte-aligned Rust `SplatUniforms`
-    /// layout (`_pad_a` and `_pad_b`).  WebGPU accepts a host buffer that is
-    /// larger than the shader struct, but keeping both sides in sync prevents
-    /// future alignment bugs when the struct is extended.
-    _pad_a: u32,
-    _pad_b: u32,
+    /// World-space UV scale for the Rock triplanar projection.
+    /// Equals tile_scale / world_extent so density matches the top-down layers.
+    triplanar_scale: f32,
+    /// Blend sharpness for the triplanar axis transition (k >= 1; 4 is good).
+    triplanar_sharpness: f32,
+}
+
+// ---------------------------------------------------------------------------
+// Triplanar helpers (used for the Rock layer only)
+// ---------------------------------------------------------------------------
+
+/// Compute per-axis blend weights from the world-space surface normal.
+/// |normal| is assumed to be unit length; k sharpens the transition seam.
+fn triplanar_weights(world_normal: vec3<f32>, k: f32) -> vec3<f32> {
+    var w = pow(abs(world_normal), vec3<f32>(k));
+    return w / (w.x + w.y + w.z + 0.0001);
+}
+
+/// Sample a texture using triplanar world-space projection and return vec4.
+/// Three lookups — YZ, XZ, XY planes — are blended by `weights`.
+fn triplanar_albedo(
+    tex: texture_2d<f32>,
+    samp: sampler,
+    world_pos: vec3<f32>,
+    scale: f32,
+    weights: vec3<f32>,
+) -> vec4<f32> {
+    let col_x = textureSample(tex, samp, fract(world_pos.zy * scale));
+    let col_y = textureSample(tex, samp, fract(world_pos.xz * scale));
+    let col_z = textureSample(tex, samp, fract(world_pos.xy * scale));
+    return col_x * weights.x + col_y * weights.y + col_z * weights.z;
+}
+
+/// Sample a normal map using triplanar projection and return packed rgb vec3.
+/// The result is in the same [0, 1] packed space as a regular normal-map
+/// sample, so it can be blended with other layers before decoding.
+fn triplanar_normal(
+    tex: texture_2d<f32>,
+    samp: sampler,
+    world_pos: vec3<f32>,
+    scale: f32,
+    weights: vec3<f32>,
+) -> vec3<f32> {
+    let n_x = textureSample(tex, samp, fract(world_pos.zy * scale)).rgb;
+    let n_y = textureSample(tex, samp, fract(world_pos.xz * scale)).rgb;
+    let n_z = textureSample(tex, samp, fract(world_pos.xy * scale)).rgb;
+    return n_x * weights.x + n_y * weights.y + n_z * weights.z;
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(118) var<uniform> splat_uniforms: SplatUniforms;
@@ -119,13 +160,27 @@ fn fragment(
         let weight_sum = max(raw_weights.r + raw_weights.g + raw_weights.b + raw_weights.a, 0.0001);
         let weights = raw_weights / weight_sum;
 
-        // Tiled UV wraps at each tile boundary.
+        // Tiled UV wraps at each tile boundary (used by grass, dirt, snow).
         let tiled_uv = fract(in.uv * splat_uniforms.tile_scale);
 
+        // Triplanar data for the Rock layer — computed once, shared by albedo
+        // and normal sampling below.
+        let world_pos = in.world_position.xyz;
+        let tp_weights = triplanar_weights(
+            in.world_normal,
+            splat_uniforms.triplanar_sharpness,
+        );
+
         // --- Albedo blend ---------------------------------------------------
+        // Grass, Dirt, Snow use standard top-down tiled UVs (1 lookup each).
+        // Rock uses triplanar world-space projection (3 lookups) to eliminate
+        // texture stretching on steep cliff faces.
         let a0 = textureSample(layer_albedo_0, layer_albedo_0_sampler, tiled_uv);
         let a1 = textureSample(layer_albedo_1, layer_albedo_1_sampler, tiled_uv);
-        let a2 = textureSample(layer_albedo_2, layer_albedo_2_sampler, tiled_uv);
+        let a2 = triplanar_albedo(
+            layer_albedo_2, layer_albedo_2_sampler,
+            world_pos, splat_uniforms.triplanar_scale, tp_weights,
+        );
         let a3 = textureSample(layer_albedo_3, layer_albedo_3_sampler, tiled_uv);
 
         pbr_input.material.base_color =
@@ -135,10 +190,14 @@ fn fragment(
         // Sample packed tangent-space normals ([0, 1] range) and blend before
         // decoding.  Blending pre-decode is equivalent to blending post-decode
         // when the weights are normalised (unit sum, linear transform).
+        // Rock normals use triplanar sampling for the same reason as albedo.
 #ifdef VERTEX_TANGENTS
         let n0 = textureSample(layer_normal_0, layer_normal_0_sampler, tiled_uv).rgb;
         let n1 = textureSample(layer_normal_1, layer_normal_1_sampler, tiled_uv).rgb;
-        let n2 = textureSample(layer_normal_2, layer_normal_2_sampler, tiled_uv).rgb;
+        let n2 = triplanar_normal(
+            layer_normal_2, layer_normal_2_sampler,
+            world_pos, splat_uniforms.triplanar_scale, tp_weights,
+        );
         let n3 = textureSample(layer_normal_3, layer_normal_3_sampler, tiled_uv).rgb;
 
         let blended_n = n0 * weights.r + n1 * weights.g + n2 * weights.b + n3 * weights.a;

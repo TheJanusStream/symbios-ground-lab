@@ -40,9 +40,13 @@ pub struct SplatUniforms {
     /// Non-zero enables splat blending; zero uses the base StandardMaterial
     /// colour unchanged.
     pub enabled: u32,
-    // Explicit padding to meet the 16-byte minimum uniform-buffer size.
-    pub _pad_a: u32,
-    pub _pad_b: u32,
+    /// World-space UV scale for the Rock triplanar projection.
+    /// Equals `tile_scale / world_extent` so the rock texture tiles at the
+    /// same density as the top-down layers.
+    pub triplanar_scale: f32,
+    /// Controls how sharply the triplanar blend transitions between axes.
+    /// Higher values (e.g. 4–8) tighten the blend seams; 1.0 is fully linear.
+    pub triplanar_sharpness: f32,
 }
 
 /// The [`MaterialExtension`] that drives the splat shader.

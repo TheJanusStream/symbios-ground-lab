@@ -282,11 +282,13 @@ pub fn apply_splat_material(
         mat.extension.layer_normal_2 = mat_state.layer_normal[2].clone().unwrap_or_default();
         mat.extension.layer_normal_3 = mat_state.layer_normal[3].clone().unwrap_or_default();
 
+        let world_extent =
+            (terrain_config.grid_size - 1) as f32 * terrain_config.cell_scale;
         mat.extension.uniforms = SplatUniforms {
             tile_scale: mat_config.tile_scale,
             enabled: 1,
-            _pad_a: 0,
-            _pad_b: 0,
+            triplanar_scale: mat_config.tile_scale / world_extent.max(1.0),
+            triplanar_sharpness: 4.0,
         };
     }
 
