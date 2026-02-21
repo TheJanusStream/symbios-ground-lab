@@ -164,6 +164,12 @@ pub struct ErosionVizState {
     /// In-flight async task that generates the base (uneroded) heightmap before
     /// the visualisation can start.  `None` once init completes or is cancelled.
     pub init_task: Option<Task<HeightMap>>,
+    /// Tasks that were detached by "Stop Viz" while still running.  Dropping a
+    /// `Task` handle does NOT cancel the underlying thread; the CPU work keeps
+    /// running until the pool slot is released naturally.  Keeping the handles
+    /// here lets `poll_viz_init` drain them to completion before a new
+    /// visualisation is allowed to start, capping concurrent init tasks at one.
+    pub abandoned_init_tasks: Vec<Task<HeightMap>>,
     /// Working copy of the heightmap being eroded in real-time.
     pub heightmap: Option<HeightMap>,
     /// Deterministic RNG for spawning droplets.
@@ -193,6 +199,7 @@ impl Default for ErosionVizState {
         Self {
             enabled: false,
             init_task: None,
+            abandoned_init_tasks: Vec::new(),
             heightmap: None,
             rng: Pcg64Mcg::seed_from_u64(0),
             active: Vec::new(),

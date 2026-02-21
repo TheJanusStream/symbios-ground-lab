@@ -194,16 +194,22 @@ fn show_splat_rule(ui: &mut egui::Ui, rule: &mut SplatRuleParams) -> bool {
 
     ui.horizontal(|ui| {
         ui.label("Height");
+        // Link ranges so min cannot exceed max in the UI.  Use local copies of
+        // the current bounds to avoid simultaneous mutable + shared borrows of
+        // the same struct (even though Rust allows field-disjoint borrows,
+        // passing both to a single call site is cleaner with copies).
+        let h_max = rule.height_max;
         ch |= ui
             .add(
-                egui::Slider::new(&mut rule.height_min, 0.0f32..=1.0)
+                egui::Slider::new(&mut rule.height_min, 0.0f32..=h_max)
                     .prefix("min ")
                     .max_decimals(2),
             )
             .changed();
+        let h_min = rule.height_min;
         ch |= ui
             .add(
-                egui::Slider::new(&mut rule.height_max, 0.0f32..=1.0)
+                egui::Slider::new(&mut rule.height_max, h_min..=1.0)
                     .prefix("max ")
                     .max_decimals(2),
             )
@@ -212,16 +218,18 @@ fn show_splat_rule(ui: &mut egui::Ui, rule: &mut SplatRuleParams) -> bool {
 
     ui.horizontal(|ui| {
         ui.label("Slope");
+        let s_max = rule.slope_max;
         ch |= ui
             .add(
-                egui::Slider::new(&mut rule.slope_min, 0.0f32..=10.0)
+                egui::Slider::new(&mut rule.slope_min, 0.0f32..=s_max)
                     .prefix("min ")
                     .max_decimals(2),
             )
             .changed();
+        let s_min = rule.slope_min;
         ch |= ui
             .add(
-                egui::Slider::new(&mut rule.slope_max, 0.0f32..=10.0)
+                egui::Slider::new(&mut rule.slope_max, s_min..=10.0)
                     .prefix("max ")
                     .max_decimals(2),
             )

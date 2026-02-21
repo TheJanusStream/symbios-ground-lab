@@ -5,6 +5,7 @@ use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, ExportStatus, ExportTask,
     GenerationTask, GeneratorKind, TerrainConfig, TerrainDebounce,
 };
+use crate::core::material_config::MaterialConfig;
 use crate::logic::erosion_viz::start_erosion_viz;
 use crate::visuals::export::{spawn_json_export, spawn_obj_export, spawn_png_export};
 
@@ -31,6 +32,7 @@ pub fn render_ui(
     mut current_hm: ResMut<CurrentHeightMap>,
     mut dirty_mesh: ResMut<DirtyMesh>,
     time: Res<Time>,
+    mat_config: Res<MaterialConfig>,
 ) {
     // Tick debounce
     if debounce.pending {
@@ -44,6 +46,10 @@ pub fn render_ui(
     let is_generating = task.0.is_some();
     let viz_initializing = viz.init_task.is_some();
     let viz_active = viz.enabled;
+    // Abandoned init tasks are still consuming a thread-pool slot even though
+    // the handle has been moved here from `init_task`. Block a new launch
+    // until they drain so we never accumulate more than one concurrent init.
+    let viz_draining = !viz.abandoned_init_tasks.is_empty();
 
     let Ok(ctx) = contexts.ctx_mut() else { return };
 
@@ -305,6 +311,7 @@ pub fn render_ui(
                         !is_generating
                             && !viz_active
                             && !viz_initializing
+                            && !viz_draining
                             && config.erosion_enabled,
                         egui::Button::new("Visualise Erosion"),
                     )
@@ -331,7 +338,13 @@ pub fn render_ui(
                         dirty_mesh.0 = true;
                     }
                     viz.enabled = false;
-                    viz.init_task = None; // cancel pending async init
+                    // Move rather than drop: dropping a Task handle does NOT
+                    // cancel the underlying thread. Keeping the handle in
+                    // `abandoned_init_tasks` lets `poll_viz_init` drain it to
+                    // completion and blocks a new launch until the slot is free.
+                    if let Some(t) = viz.init_task.take() {
+                        viz.abandoned_init_tasks.push(t);
+                    }
                 }
             });
 
@@ -365,6 +378,7 @@ pub fn render_ui(
                             {
                                 spawn_json_export(
                                     (*config).clone(),
+                                    (*mat_config).clone(),
                                     current_hm.0.clone(),
                                     &mut export_task,
                                     &mut export_status,

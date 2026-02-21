@@ -127,13 +127,15 @@ fn decode_normal(encoded: vec3<f32>) -> vec3<f32> {
 /// tangent frame before blending, instead of being misinterpreted through the
 /// top-down mesh TBN.
 ///
-/// Axis TBN frames (U, V, N):
-///   X-projection (uv = world.zy): U = +Z, V = +Y, N = ±X
-///   Y-projection (uv = world.xz): U = +X, V = +Z, N = ±Y
-///   Z-projection (uv = world.xy): U = +X, V = +Y, N = ±Z
+/// Axis TBN frames — right-handed (T×B = N) for all face orientations:
+///   X-projection (uv = world.zy): T = -sign_x·Z, B = +Y, N = sign_x·X
+///   Y-projection (uv = world.xz): T = +X,         B = -sign_y·Z, N = sign_y·Y
+///   Z-projection (uv = world.xy): T = sign_z·X,   B = +Y,        N = sign_z·Z
 ///
-/// The ± sign comes from `sign(world_normal.<axis>)` so back-facing surfaces
-/// are handled correctly.
+/// The sign terms ensure the tangent or bitangent is flipped on back-facing
+/// surfaces so that T×B always aligns with the face normal, keeping the frame
+/// right-handed and preventing the "inside-out" normal-map artefact on faces
+/// whose surface normal points in a negative axis direction.
 fn triplanar_normal_world(
     tex: texture_2d<f32>,
     samp: sampler,
@@ -150,11 +152,14 @@ fn triplanar_normal_world(
     let tn_y = decode_normal(textureSample(tex, samp, fract(world_pos.xz * scale)).rgb);
     let tn_z = decode_normal(textureSample(tex, samp, fract(world_pos.xy * scale)).rgb);
 
-    // Reproject each tangent-space normal into world space using the
-    // axis-aligned TBN for that projection plane.
-    let wn_x = vec3<f32>(tn_x.z * sign_x, tn_x.y, tn_x.x);
-    let wn_y = vec3<f32>(tn_y.x, tn_y.z * sign_y, tn_y.y);
-    let wn_z = vec3<f32>(tn_z.x, tn_z.y, tn_z.z * sign_z);
+    // Reproject each tangent-space normal into world space via the per-face TBN.
+    // Derivation: world = tx·T + ty·B + tz·N, with T/B chosen for right-handedness.
+    //   X: T=-sx·Z, B=+Y, N=sx·X → world = (tz·sx,  ty, -tx·sx)
+    //   Y: T=+X,    B=-sy·Z, N=sy·Y → world = (tx, tz·sy, -ty·sy)
+    //   Z: T=sz·X,  B=+Y,   N=sz·Z → world = (tx·sz,  ty,  tz·sz)
+    let wn_x = vec3<f32>(tn_x.z * sign_x, tn_x.y, -tn_x.x * sign_x);
+    let wn_y = vec3<f32>(tn_y.x, tn_y.z * sign_y, -tn_y.y * sign_y);
+    let wn_z = vec3<f32>(tn_z.x * sign_z, tn_z.y, tn_z.z * sign_z);
 
     return normalize(wn_x * weights.x + wn_y * weights.y + wn_z * weights.z);
 }
@@ -185,8 +190,16 @@ fn fragment(
         // [0, 1] and decoded via `* 2 - 1`.  If the blended vector drifts
         // toward (0.5, 0.5, 0.5) the decoded result is (0, 0, 0), and
         // normalising a zero vector produces NaN that infects the whole pixel.
-        let weight_sum = max(raw_weights.r + raw_weights.g + raw_weights.b + raw_weights.a, 0.0001);
-        let weights = raw_weights / weight_sum;
+        //
+        // When no rule matches at all (raw_sum == 0 — common on very steep
+        // cliffs that exceed every layer's slope_max), dividing vec4(0) by a
+        // small epsilon still yields vec4(0), which would normalise to NaN.
+        // Fall back to 100% rock (channel B) in that case: rock is the most
+        // appropriate material for unclassified steep terrain.
+        let raw_sum = raw_weights.r + raw_weights.g + raw_weights.b + raw_weights.a;
+        let no_coverage = raw_sum < 0.0001;
+        let safe_sum = select(raw_sum, 1.0, no_coverage);
+        let weights = select(raw_weights / safe_sum, vec4<f32>(0.0, 0.0, 1.0, 0.0), no_coverage);
 
         // Tiled UV wraps at each tile boundary (used by grass, dirt, snow).
         let tiled_uv = fract(in.uv * splat_uniforms.tile_scale);

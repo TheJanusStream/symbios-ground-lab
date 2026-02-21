@@ -4,7 +4,7 @@ use bevy_symbios_texture::rock::RockConfig;
 use symbios_ground::splat::SplatRule;
 
 /// Per-layer splat rule parameters (height/slope thresholds for a texture layer).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SplatRuleParams {
     pub height_min: f32,
     pub height_max: f32,
@@ -18,13 +18,18 @@ impl SplatRuleParams {
     ///
     /// `height_min`/`height_max` are stored in normalised [0, 1] but the
     /// `SplatMapper` operates on raw heightmap values (i.e. [0, height_scale]).
+    ///
+    /// The UI presents independent sliders for min/max with no cross-widget
+    /// validation, so a user can drag min above max. Normalise the pair here
+    /// so downstream code always receives a well-ordered range.
     pub fn to_splat_rule(&self, height_scale: f32) -> SplatRule {
+        let h_lo = self.height_min.min(self.height_max);
+        let h_hi = self.height_min.max(self.height_max);
+        let s_lo = self.slope_min.min(self.slope_max);
+        let s_hi = self.slope_min.max(self.slope_max);
         SplatRule::new(
-            (
-                self.height_min * height_scale,
-                self.height_max * height_scale,
-            ),
-            (self.slope_min, self.slope_max),
+            (h_lo * height_scale, h_hi * height_scale),
+            (s_lo, s_hi),
             self.sharpness,
         )
     }

@@ -1,9 +1,12 @@
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::tasks::futures_lite::future;
+use bevy_symbios_texture::ground::GroundConfig;
+use bevy_symbios_texture::rock::RockConfig;
 use symbios_ground::HeightMap;
 
 use crate::core::config::{ExportStatus, ExportTask, TerrainConfig};
+use crate::core::material_config::{MaterialConfig, SplatRuleParams};
 
 // ---------------------------------------------------------------------------
 // Platform-agnostic file I/O
@@ -222,10 +225,13 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
     let w = hm.width();
     let h = hm.height();
     // ~84 bytes per vertex/UV/normal triple + ~160 bytes per quad's two face
-    // lines. Accurate pre-allocation avoids repeated doubling for mid-size
-    // grids; capped at 128 MiB so we never pre-commit huge RAM for large ones.
+    // lines. Pre-allocate the full estimate in one shot: capping this value
+    // (e.g. at 128 MiB) is counterproductive — it causes the Vec to double
+    // repeatedly (128→256→512→1024 MiB), which requires both the old and new
+    // buffers to be live simultaneously and roughly doubles the peak RSS
+    // compared to a single upfront allocation that exactly fits the content.
     let estimated = w * h * 84 + w.saturating_sub(1) * h.saturating_sub(1) * 160;
-    let mut out = String::with_capacity(estimated.min(128 * 1024 * 1024));
+    let mut out = String::with_capacity(estimated);
 
     out.push_str("# symbios-ground-lab terrain export\n");
 
@@ -288,14 +294,101 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
 // Issue #8: JSON config/metadata export
 // ---------------------------------------------------------------------------
 
-/// Spawn a background task that serialises the current [`TerrainConfig`] plus
-/// derived metadata as a pretty-printed JSON file (`exports/terrain.json`).
+// Serialisable mirror structs for `GroundConfig` and `RockConfig` from the
+// `bevy_symbios_texture` crate, which does not depend on serde. All fields
+// are primitive (f32/f64/usize/u32/[f32;3]) so conversion is trivial.
+
+#[derive(serde::Serialize)]
+struct GroundConfigExport {
+    seed: u32,
+    macro_scale: f64,
+    macro_octaves: usize,
+    micro_scale: f64,
+    micro_octaves: usize,
+    micro_weight: f64,
+    color_dry: [f32; 3],
+    color_moist: [f32; 3],
+    normal_strength: f32,
+}
+
+impl From<&GroundConfig> for GroundConfigExport {
+    fn from(c: &GroundConfig) -> Self {
+        Self {
+            seed: c.seed,
+            macro_scale: c.macro_scale,
+            macro_octaves: c.macro_octaves,
+            micro_scale: c.micro_scale,
+            micro_octaves: c.micro_octaves,
+            micro_weight: c.micro_weight,
+            color_dry: c.color_dry,
+            color_moist: c.color_moist,
+            normal_strength: c.normal_strength,
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct RockConfigExport {
+    seed: u32,
+    scale: f64,
+    octaves: usize,
+    attenuation: f64,
+    color_light: [f32; 3],
+    color_dark: [f32; 3],
+    normal_strength: f32,
+}
+
+impl From<&RockConfig> for RockConfigExport {
+    fn from(c: &RockConfig) -> Self {
+        Self {
+            seed: c.seed,
+            scale: c.scale,
+            octaves: c.octaves,
+            attenuation: c.attenuation,
+            color_light: c.color_light,
+            color_dark: c.color_dark,
+            normal_strength: c.normal_strength,
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+struct MaterialConfigExport {
+    enabled: bool,
+    texture_size: u32,
+    tile_scale: f32,
+    rules: [SplatRuleParams; 4],
+    grass: GroundConfigExport,
+    dirt: GroundConfigExport,
+    rock: RockConfigExport,
+    snow: GroundConfigExport,
+}
+
+impl From<&MaterialConfig> for MaterialConfigExport {
+    fn from(m: &MaterialConfig) -> Self {
+        Self {
+            enabled: m.enabled,
+            texture_size: m.texture_size,
+            tile_scale: m.tile_scale,
+            rules: m.rules.clone(),
+            grass: GroundConfigExport::from(&m.grass),
+            dirt: GroundConfigExport::from(&m.dirt),
+            rock: RockConfigExport::from(&m.rock),
+            snow: GroundConfigExport::from(&m.snow),
+        }
+    }
+}
+
+/// Spawn a background task that serialises the current [`TerrainConfig`] and
+/// [`MaterialConfig`] plus derived metadata as a pretty-printed JSON file
+/// (`exports/terrain.json`).
 ///
 /// Mirrors the AsyncComputeTaskPool pattern used by [`spawn_obj_export`] so
 /// that the blocking `fs::write` call on desktop never runs on the main
 /// rendering thread. `status` is set to `Exporting` immediately.
 pub fn spawn_json_export(
     config: TerrainConfig,
+    mat_config: MaterialConfig,
     hm: Option<HeightMap>,
     task: &mut ExportTask,
     status: &mut ExportStatus,
@@ -303,6 +396,7 @@ pub fn spawn_json_export(
     #[derive(serde::Serialize)]
     struct Export {
         config: TerrainConfig,
+        material: MaterialConfigExport,
         metadata: Metadata,
     }
     #[derive(serde::Serialize)]
@@ -312,6 +406,8 @@ pub fn spawn_json_export(
         world_depth: f32,
         height_range: Option<[f32; 2]>,
     }
+
+    let material = MaterialConfigExport::from(&mat_config);
 
     let pool = AsyncComputeTaskPool::get();
     let t = pool.spawn(async move {
@@ -333,7 +429,11 @@ pub fn spawn_json_export(
             }
         };
 
-        let payload = Export { config, metadata };
+        let payload = Export {
+            config,
+            material,
+            metadata,
+        };
         let json =
             serde_json::to_string_pretty(&payload).map_err(|e| format!("JSON encode: {e}"))?;
         save_file("terrain.json", &json)?;

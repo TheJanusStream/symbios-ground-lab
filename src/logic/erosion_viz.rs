@@ -42,11 +42,20 @@ pub fn start_erosion_viz(config: &TerrainConfig, state: &mut ErosionVizState) {
 /// the mesh immediately snaps to the un-eroded base state (preventing droplet
 /// gizmos from floating above the old eroded terrain for the first N frames),
 /// and enable the visualisation.
+///
+/// Also drains any abandoned init tasks (tasks detached by "Stop Viz" while
+/// still running). Polling them to completion here, rather than dropping the
+/// handles, ensures the thread pool slot is reclaimed before a new
+/// visualisation is permitted to start.
 pub fn poll_viz_init(
     mut viz: ResMut<ErosionVizState>,
     mut current_hm: ResMut<CurrentHeightMap>,
     mut dirty_mesh: ResMut<DirtyMesh>,
 ) {
+    // Drain abandoned tasks: retain only those not yet complete.
+    viz.abandoned_init_tasks
+        .retain_mut(|t| future::block_on(future::poll_once(t)).is_none());
+
     let Some(ref mut t) = viz.init_task else {
         return;
     };
