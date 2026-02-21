@@ -6,7 +6,7 @@ use crate::core::config::{
     GenerationTask, GeneratorKind, TerrainConfig, TerrainDebounce,
 };
 use crate::logic::erosion_viz::start_erosion_viz;
-use crate::visuals::export::{export_json, spawn_obj_export, spawn_png_export};
+use crate::visuals::export::{spawn_json_export, spawn_obj_export, spawn_png_export};
 
 /// Render the main "Terraformer" egui window.
 ///
@@ -145,34 +145,17 @@ pub fn render_ui(
                         // Algorithm-specific parameters
                         match config.generator_kind {
                             GeneratorKind::FbmNoise => {
+                                changed |= int_slider(ui, &mut config.octaves, "Octaves", 1..=10);
                                 changed |=
-                                    int_slider(ui, &mut config.octaves, "Octaves", 1..=10);
-                                changed |= slider(
-                                    ui,
-                                    &mut config.persistence,
-                                    "Persistence",
-                                    0.1..=0.9,
-                                );
-                                changed |= slider(
-                                    ui,
-                                    &mut config.lacunarity,
-                                    "Lacunarity",
-                                    1.5..=4.0,
-                                );
-                                changed |= slider(
-                                    ui,
-                                    &mut config.base_frequency,
-                                    "Frequency",
-                                    0.5..=16.0,
-                                );
+                                    slider(ui, &mut config.persistence, "Persistence", 0.1..=0.9);
+                                changed |=
+                                    slider(ui, &mut config.lacunarity, "Lacunarity", 1.5..=4.0);
+                                changed |=
+                                    slider(ui, &mut config.base_frequency, "Frequency", 0.5..=16.0);
                             }
                             GeneratorKind::DiamondSquare => {
-                                changed |= slider(
-                                    ui,
-                                    &mut config.ds_roughness,
-                                    "Roughness",
-                                    0.0..=1.0,
-                                );
+                                changed |=
+                                    slider(ui, &mut config.ds_roughness, "Roughness", 0.0..=1.0);
                             }
                             GeneratorKind::VoronoiTerracing => {
                                 changed |= int_slider(
@@ -205,26 +188,15 @@ pub fn render_ui(
                     ui.add_enabled_ui(!viz_active && !viz_initializing, |ui| {
                         let mut changed = false;
 
-                        changed |= checkbox(
-                            ui,
-                            &mut config.erosion_enabled,
-                            "Enable hydraulic erosion",
-                        );
+                        changed |=
+                            checkbox(ui, &mut config.erosion_enabled, "Enable hydraulic erosion");
 
                         ui.add_enabled_ui(config.erosion_enabled, |ui| {
-                            changed |= int_slider(
-                                ui,
-                                &mut config.erosion_drops,
-                                "Drops",
-                                1_000..=500_000,
-                            );
+                            changed |=
+                                int_slider(ui, &mut config.erosion_drops, "Drops", 1_000..=500_000);
                             changed |= slider(ui, &mut config.inertia, "Inertia", 0.0..=0.5);
-                            changed |= slider(
-                                ui,
-                                &mut config.erosion_rate,
-                                "Erosion rate",
-                                0.01..=1.0,
-                            );
+                            changed |=
+                                slider(ui, &mut config.erosion_rate, "Erosion rate", 0.01..=1.0);
                             changed |= slider(
                                 ui,
                                 &mut config.deposition_rate,
@@ -259,11 +231,8 @@ pub fn render_ui(
                 .show(ui, |ui| {
                     ui.add_enabled_ui(!viz_active && !viz_initializing, |ui| {
                         let mut changed = false;
-                        changed |= checkbox(
-                            ui,
-                            &mut config.thermal_enabled,
-                            "Enable thermal erosion",
-                        );
+                        changed |=
+                            checkbox(ui, &mut config.thermal_enabled, "Enable thermal erosion");
 
                         ui.add_enabled_ui(config.thermal_enabled, |ui| {
                             changed |= int_slider(
@@ -394,7 +363,12 @@ pub fn render_ui(
                                 .add_enabled(!is_exporting, egui::Button::new("JSON config"))
                                 .clicked()
                             {
-                                export_json(&config, current_hm.0.as_ref(), &mut export_status);
+                                spawn_json_export(
+                                    (*config).clone(),
+                                    current_hm.0.clone(),
+                                    &mut export_task,
+                                    &mut export_status,
+                                );
                             }
                         });
                     });

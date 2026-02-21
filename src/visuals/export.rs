@@ -217,6 +217,8 @@ mod tests {
 /// quad faces (`f`) with combined vertex/UV/normal indices. The output is
 /// suitable for import into any DCC tool that understands OBJ.
 fn heightmap_to_obj(hm: &HeightMap) -> String {
+    use std::fmt::Write as FmtWrite;
+
     let w = hm.width();
     let h = hm.height();
     // ~84 bytes per vertex/UV/normal triple + ~160 bytes per quad's two face
@@ -227,13 +229,14 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
 
     out.push_str("# symbios-ground-lab terrain export\n");
 
-    // Vertices
+    // Vertices — write! avoids the transient String allocation that format!
+    // + push_str would produce on every iteration.
     for z in 0..h {
         for x in 0..w {
             let wx = x as f32 * hm.scale();
             let wy = hm.get(x, z);
             let wz = z as f32 * hm.scale();
-            out.push_str(&format!("v {wx:.4} {wy:.4} {wz:.4}\n"));
+            writeln!(out, "v {wx:.4} {wy:.4} {wz:.4}").unwrap();
         }
     }
 
@@ -250,7 +253,7 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
             } else {
                 0.0
             };
-            out.push_str(&format!("vt {u:.6} {v:.6}\n"));
+            writeln!(out, "vt {u:.6} {v:.6}").unwrap();
         }
     }
 
@@ -258,7 +261,7 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
     for z in 0..h {
         for x in 0..w {
             let [nx, ny, nz] = hm.get_normal_at(x as f32 * hm.scale(), z as f32 * hm.scale());
-            out.push_str(&format!("vn {nx:.6} {ny:.6} {nz:.6}\n"));
+            writeln!(out, "vn {nx:.6} {ny:.6} {nz:.6}").unwrap();
         }
     }
 
@@ -269,10 +272,12 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
             let tr = z * w + (x + 1) + 1;
             let bl = (z + 1) * w + x + 1;
             let br = (z + 1) * w + (x + 1) + 1;
-            out.push_str(&format!(
+            write!(
+                out,
                 "f {tl}/{tl}/{tl} {bl}/{bl}/{bl} {br}/{br}/{br}\n\
                  f {tl}/{tl}/{tl} {br}/{br}/{br} {tr}/{tr}/{tr}\n"
-            ));
+            )
+            .unwrap();
         }
     }
 
@@ -283,17 +288,21 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
 // Issue #8: JSON config/metadata export
 // ---------------------------------------------------------------------------
 
-/// Export the current [`TerrainConfig`] plus derived metadata as a
-/// pretty-printed JSON file (`exports/terrain.json`).
+/// Spawn a background task that serialises the current [`TerrainConfig`] plus
+/// derived metadata as a pretty-printed JSON file (`exports/terrain.json`).
 ///
-/// If a heightmap is provided, the metadata includes the actual grid
-/// dimensions, world extents, and measured height range. Otherwise, the values
-/// are estimated from `config` alone. `status` is updated to reflect success
-/// or failure.
-pub fn export_json(config: &TerrainConfig, hm: Option<&HeightMap>, status: &mut ExportStatus) {
+/// Mirrors the AsyncComputeTaskPool pattern used by [`spawn_obj_export`] so
+/// that the blocking `fs::write` call on desktop never runs on the main
+/// rendering thread. `status` is set to `Exporting` immediately.
+pub fn spawn_json_export(
+    config: TerrainConfig,
+    hm: Option<HeightMap>,
+    task: &mut ExportTask,
+    status: &mut ExportStatus,
+) {
     #[derive(serde::Serialize)]
-    struct Export<'a> {
-        config: &'a TerrainConfig,
+    struct Export {
+        config: TerrainConfig,
         metadata: Metadata,
     }
     #[derive(serde::Serialize)]
@@ -304,30 +313,32 @@ pub fn export_json(config: &TerrainConfig, hm: Option<&HeightMap>, status: &mut 
         height_range: Option<[f32; 2]>,
     }
 
-    let metadata = if let Some(hm) = hm {
-        let min = hm.data().iter().cloned().fold(f32::INFINITY, f32::min);
-        let max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-        Metadata {
-            grid_size: hm.width(),
-            world_width: hm.world_width(),
-            world_depth: hm.world_depth(),
-            height_range: Some([min, max]),
-        }
-    } else {
-        Metadata {
-            grid_size: config.grid_size as usize,
-            world_width: (config.grid_size - 1) as f32 * config.cell_scale,
-            world_depth: (config.grid_size - 1) as f32 * config.cell_scale,
-            height_range: None,
-        }
-    };
+    let pool = AsyncComputeTaskPool::get();
+    let t = pool.spawn(async move {
+        let metadata = if let Some(ref hm) = hm {
+            let min = hm.data().iter().cloned().fold(f32::INFINITY, f32::min);
+            let max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            Metadata {
+                grid_size: hm.width(),
+                world_width: hm.world_width(),
+                world_depth: hm.world_depth(),
+                height_range: Some([min, max]),
+            }
+        } else {
+            Metadata {
+                grid_size: config.grid_size as usize,
+                world_width: (config.grid_size - 1) as f32 * config.cell_scale,
+                world_depth: (config.grid_size - 1) as f32 * config.cell_scale,
+                height_range: None,
+            }
+        };
 
-    let payload = Export { config, metadata };
-    match serde_json::to_string_pretty(&payload) {
-        Ok(json) => match save_file("terrain.json", &json) {
-            Ok(()) => *status = ExportStatus::Done("terrain.json".into()),
-            Err(e) => *status = ExportStatus::Error(e),
-        },
-        Err(e) => *status = ExportStatus::Error(format!("JSON encode: {e}")),
-    }
+        let payload = Export { config, metadata };
+        let json =
+            serde_json::to_string_pretty(&payload).map_err(|e| format!("JSON encode: {e}"))?;
+        save_file("terrain.json", &json)?;
+        Ok("terrain.json".into())
+    });
+    task.0 = Some(t);
+    *status = ExportStatus::Exporting;
 }

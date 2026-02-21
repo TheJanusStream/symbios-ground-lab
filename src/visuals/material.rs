@@ -99,6 +99,9 @@ pub fn start_texture_tasks(
     }
     if !mat_config.enabled {
         mat_state.textures_dirty = false;
+        // Clear any spinner the UI may be showing from a generation that was
+        // in-flight when the user disabled splat materials.
+        mat_state.status = MaterialStatus::Idle;
         return;
     }
 
@@ -289,8 +292,7 @@ pub fn apply_splat_material(
         mat.extension.layer_normal_2 = mat_state.layer_normal[2].clone().unwrap_or_default();
         mat.extension.layer_normal_3 = mat_state.layer_normal[3].clone().unwrap_or_default();
 
-        let world_extent =
-            (terrain_config.grid_size - 1) as f32 * terrain_config.cell_scale;
+        let world_extent = (terrain_config.grid_size - 1) as f32 * terrain_config.cell_scale;
         mat.extension.uniforms = SplatUniforms {
             tile_scale: mat_config.tile_scale,
             enabled: 1,

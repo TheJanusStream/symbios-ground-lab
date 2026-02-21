@@ -103,12 +103,13 @@ impl Default for MaterialConfig {
                     slope_max: 0.60,
                     sharpness: 2.0,
                 },
-                // B — Rock: steep slopes
+                // B — Rock: steep slopes (up to near-vertical; slope is
+                // gradient magnitude so 1.0 = 45°, 10.0 covers cliffs).
                 SplatRuleParams {
                     height_min: 0.0,
                     height_max: 1.0,
                     slope_min: 0.25,
-                    slope_max: 1.0,
+                    slope_max: 10.0,
                     sharpness: 3.0,
                 },
                 // A — Snow: high altitude, gentle slope

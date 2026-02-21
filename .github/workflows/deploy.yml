@@ -32,6 +32,8 @@ jobs:
             - name: Install Binaryen (wasm-opt)
               run: |
                   wget https://github.com/WebAssembly/binaryen/releases/download/version_117/binaryen-version_117-x86_64-linux.tar.gz
+                  wget https://github.com/WebAssembly/binaryen/releases/download/version_117/binaryen-version_117-x86_64-linux.tar.gz.sha256
+                  sha256sum -c binaryen-version_117-x86_64-linux.tar.gz.sha256
                   tar -xzf binaryen-version_117-x86_64-linux.tar.gz
                   echo "$(pwd)/binaryen-version_117/bin" >> $GITHUB_PATH
 

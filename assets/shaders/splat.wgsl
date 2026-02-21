@@ -115,20 +115,48 @@ fn triplanar_albedo(
     return col_x * weights.x + col_y * weights.y + col_z * weights.z;
 }
 
-/// Sample a normal map using triplanar projection and return packed rgb vec3.
-/// The result is in the same [0, 1] packed space as a regular normal-map
-/// sample, so it can be blended with other layers before decoding.
-fn triplanar_normal(
+/// Decode a packed normal-map sample from [0, 1] to [-1, 1] tangent space.
+fn decode_normal(encoded: vec3<f32>) -> vec3<f32> {
+    return encoded * 2.0 - 1.0;
+}
+
+/// Sample a normal map using triplanar projection and return a world-space normal.
+///
+/// Each projection plane gets its own synthesized TBN so that cliff-face
+/// normals (dominant X/Z contribution) are decoded relative to the correct
+/// tangent frame before blending, instead of being misinterpreted through the
+/// top-down mesh TBN.
+///
+/// Axis TBN frames (U, V, N):
+///   X-projection (uv = world.zy): U = +Z, V = +Y, N = ±X
+///   Y-projection (uv = world.xz): U = +X, V = +Z, N = ±Y
+///   Z-projection (uv = world.xy): U = +X, V = +Y, N = ±Z
+///
+/// The ± sign comes from `sign(world_normal.<axis>)` so back-facing surfaces
+/// are handled correctly.
+fn triplanar_normal_world(
     tex: texture_2d<f32>,
     samp: sampler,
     world_pos: vec3<f32>,
+    world_normal: vec3<f32>,
     scale: f32,
     weights: vec3<f32>,
 ) -> vec3<f32> {
-    let n_x = textureSample(tex, samp, fract(world_pos.zy * scale)).rgb;
-    let n_y = textureSample(tex, samp, fract(world_pos.xz * scale)).rgb;
-    let n_z = textureSample(tex, samp, fract(world_pos.xy * scale)).rgb;
-    return n_x * weights.x + n_y * weights.y + n_z * weights.z;
+    let sign_x = select(-1.0, 1.0, world_normal.x >= 0.0);
+    let sign_y = select(-1.0, 1.0, world_normal.y >= 0.0);
+    let sign_z = select(-1.0, 1.0, world_normal.z >= 0.0);
+
+    let tn_x = decode_normal(textureSample(tex, samp, fract(world_pos.zy * scale)).rgb);
+    let tn_y = decode_normal(textureSample(tex, samp, fract(world_pos.xz * scale)).rgb);
+    let tn_z = decode_normal(textureSample(tex, samp, fract(world_pos.xy * scale)).rgb);
+
+    // Reproject each tangent-space normal into world space using the
+    // axis-aligned TBN for that projection plane.
+    let wn_x = vec3<f32>(tn_x.z * sign_x, tn_x.y, tn_x.x);
+    let wn_y = vec3<f32>(tn_y.x, tn_y.z * sign_y, tn_y.y);
+    let wn_z = vec3<f32>(tn_z.x, tn_z.y, tn_z.z * sign_z);
+
+    return normalize(wn_x * weights.x + wn_y * weights.y + wn_z * weights.z);
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(118) var<uniform> splat_uniforms: SplatUniforms;
@@ -187,30 +215,29 @@ fn fragment(
             a0 * weights.r + a1 * weights.g + a2 * weights.b + a3 * weights.a;
 
         // --- Normal-map blend -----------------------------------------------
-        // Sample packed tangent-space normals ([0, 1] range) and blend before
-        // decoding.  Blending pre-decode is equivalent to blending post-decode
-        // when the weights are normalised (unit sum, linear transform).
-        // Rock normals use triplanar sampling for the same reason as albedo.
+        // All normals are converted to world space per-layer before blending.
+        // Grass, Dirt, and Snow use the mesh Mikktspace TBN (top-down UV frame);
+        // Rock uses a per-axis synthesized TBN so cliff-face projections are
+        // correctly oriented before contributing to the blend.
 #ifdef VERTEX_TANGENTS
+        let tbn = calculate_tbn_mikktspace(in.world_normal, in.world_tangent);
+
+        // Convert packed tangent-space normals → world space via the mesh TBN.
         let n0 = textureSample(layer_normal_0, layer_normal_0_sampler, tiled_uv).rgb;
         let n1 = textureSample(layer_normal_1, layer_normal_1_sampler, tiled_uv).rgb;
-        let n2 = triplanar_normal(
-            layer_normal_2, layer_normal_2_sampler,
-            world_pos, splat_uniforms.triplanar_scale, tp_weights,
-        );
         let n3 = textureSample(layer_normal_3, layer_normal_3_sampler, tiled_uv).rgb;
+        let wn0 = apply_normal_mapping(0u, tbn, false, is_front, n0);
+        let wn1 = apply_normal_mapping(0u, tbn, false, is_front, n1);
+        let wn3 = apply_normal_mapping(0u, tbn, false, is_front, n3);
 
-        let blended_n = n0 * weights.r + n1 * weights.g + n2 * weights.b + n3 * weights.a;
+        // Rock: triplanar world-space conversion per projection plane.
+        let wn2 = triplanar_normal_world(
+            layer_normal_2, layer_normal_2_sampler,
+            world_pos, in.world_normal, splat_uniforms.triplanar_scale, tp_weights,
+        );
 
-        // Reconstruct the TBN frame from the vertex tangent and apply Mikktspace
-        // normal mapping (decode + transform to world space).
-        let tbn = calculate_tbn_mikktspace(in.world_normal, in.world_tangent);
-        pbr_input.N = apply_normal_mapping(
-            0u,       // no special flags: full 3-component RGB, no Y-flip
-            tbn,
-            false,    // terrain is single-sided
-            is_front,
-            blended_n,
+        pbr_input.N = normalize(
+            wn0 * weights.r + wn1 * weights.g + wn2 * weights.b + wn3 * weights.a
         );
 #endif // VERTEX_TANGENTS
     }

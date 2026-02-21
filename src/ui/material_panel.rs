@@ -214,14 +214,14 @@ fn show_splat_rule(ui: &mut egui::Ui, rule: &mut SplatRuleParams) -> bool {
         ui.label("Slope");
         ch |= ui
             .add(
-                egui::Slider::new(&mut rule.slope_min, 0.0f32..=1.0)
+                egui::Slider::new(&mut rule.slope_min, 0.0f32..=10.0)
                     .prefix("min ")
                     .max_decimals(2),
             )
             .changed();
         ch |= ui
             .add(
-                egui::Slider::new(&mut rule.slope_max, 0.0f32..=1.0)
+                egui::Slider::new(&mut rule.slope_max, 0.0f32..=10.0)
                     .prefix("max ")
                     .max_decimals(2),
             )

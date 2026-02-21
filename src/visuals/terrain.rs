@@ -82,13 +82,16 @@ pub fn rebuild_terrain(
             .expect("terrain mesh tangent generation failed");
     }
 
-    for (mut mesh3d, mut transform) in &mut query {
+    // There is always exactly one TerrainMesh. iter_mut().next() lets us move
+    // `mesh` by value without cloning (Mesh doesn't implement Default, so
+    // mem::take is not an option).
+    if let Some((mut mesh3d, mut transform)) = query.iter_mut().next() {
         // Update the existing asset buffer in-place so the old allocation is
         // reused and never orphaned.
         if let Some(existing) = meshes.get_mut(&mesh3d.0) {
-            *existing = mesh.clone();
+            *existing = mesh;
         } else {
-            mesh3d.0 = meshes.add(mesh.clone());
+            mesh3d.0 = meshes.add(mesh);
         }
         let half = world_extent * 0.5;
         transform.translation = Vec3::new(-half, 0.0, -half);
