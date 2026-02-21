@@ -1,5 +1,4 @@
 use bevy::color::palettes::css::WHITE;
-use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy_panorbit_camera::PanOrbitCamera;
 
@@ -14,7 +13,10 @@ pub fn setup_scene(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: 5000.0,
-            shadows_enabled: true,
+            // Shadows disabled: each shadow cascade consumes texture units.
+            // WebGL 2 guarantees only 16 texture image units per draw call;
+            // keeping shadows off ensures we stay well under that limit.
+            shadows_enabled: false,
             color: Color::srgb(1.0, 0.96, 0.88),
             ..default()
         },
@@ -43,6 +45,7 @@ pub fn setup_scene(mut commands: Commands) {
             ..default()
         },
         Camera3d::default(),
-        Bloom::NATURAL, // Enable Bloom
+        // Bloom disabled: uses additional render passes that can exceed
+        // WebGL 2 resource limits on low-end devices.
     ));
 }

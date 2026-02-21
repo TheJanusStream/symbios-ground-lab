@@ -1,4 +1,8 @@
-use bevy::prelude::*;
+use bevy::{
+    asset::RenderAssetUsages,
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+};
 use bevy_symbios_ground::{HeightMapMeshBuilder, NormalMethod};
 
 use crate::core::config::{CurrentHeightMap, DirtyFlags, DirtyMesh};
@@ -19,6 +23,7 @@ pub fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SplatTerrainMaterial>>,
+    mut images: ResMut<Assets<Image>>,
     mut dirty_flags: ResMut<DirtyFlags>,
 ) {
     let placeholder = meshes.add(
@@ -28,13 +33,41 @@ pub fn spawn_terrain(
             .subdivisions(1)
             .build(),
     );
+
+    // `AsBindGroup` for `dimension = "2d_array"` creates a `TextureViewDimension::D2Array`
+    // view.  Bevy's default fallback (a 1×1 2D texture) produces a `D2` view, causing
+    // a wgpu validation error before the real arrays are uploaded.  Seed the extension
+    // with 1×1×4 array textures so the bind group is always valid from frame 0.
+    // Four identical white/flat-normal pixels — one per splat layer — satisfy the
+    // layer-count requirement without wasting memory.
+    let albedo_placeholder = images.add(Image::new(
+        Extent3d { width: 1, height: 1, depth_or_array_layers: 4 },
+        TextureDimension::D2,
+        vec![255u8; 4 * 4], // 4 layers × (R G B A)
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    ));
+    // Flat normal: (128, 128, 255, 255) = (0, 0, 1) in tangent space.
+    let flat_normal_pixel: Vec<u8> = vec![128, 128, 255, 255];
+    let normal_placeholder = images.add(Image::new(
+        Extent3d { width: 1, height: 1, depth_or_array_layers: 4 },
+        TextureDimension::D2,
+        flat_normal_pixel.repeat(4), // 4 layers
+        TextureFormat::Rgba8Unorm,
+        RenderAssetUsages::RENDER_WORLD,
+    ));
+
     let mat_handle = materials.add(SplatTerrainMaterial {
         base: StandardMaterial {
             base_color: Color::srgb(0.35, 0.55, 0.25),
             perceptual_roughness: 0.9,
             ..default()
         },
-        extension: SplatExtension::default(), // enabled = 0, all handles invalid
+        extension: SplatExtension {
+            albedo_array: albedo_placeholder,
+            normal_array: normal_placeholder,
+            ..default() // enabled = 0, weight_map = default handle
+        },
     });
     commands.spawn((
         Mesh3d(placeholder),

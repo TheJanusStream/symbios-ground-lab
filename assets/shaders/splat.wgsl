@@ -1,7 +1,15 @@
 // Fragment shader for splat-based terrain materials.
 //
-// Replaces the CPU bake step: the weight map and four layer textures
-// (albedo + normal) are bound directly and blended per-pixel on the GPU.
+// Replaces the CPU bake step: the weight map and two texture arrays
+// (albedo + normal, each with 4 layers) are bound directly and blended
+// per-pixel on the GPU.
+//
+// Layer indices within each array:
+//   0 = Grass, 1 = Dirt, 2 = Rock, 3 = Snow
+//
+// Texture arrays reduce the active texture unit count from 9 (the old
+// per-layer discrete binding scheme) down to 3, safely fitting within the
+// WebGL 2 minimum guarantee of 16 texture image units.
 //
 // UVs on the terrain mesh span [0, 1] across the full terrain, so:
 //   - The weight map is sampled at those UVs (one texel per heightmap cell).
@@ -41,41 +49,17 @@
 // ---------------------------------------------------------------------------
 
 /// RGBA weight map — one texel per heightmap cell, full-terrain coverage.
-/// Channels: R = grass, G = dirt, B = rock, A = snow.
+/// Channels: R = Grass, G = Dirt, B = Rock, A = Snow.
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var splat_weight_map: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(101) var splat_weight_sampler: sampler;
 
-/// Layer 0 (grass) albedo — tiling, sRGB.
-@group(#{MATERIAL_BIND_GROUP}) @binding(102) var layer_albedo_0: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(103) var layer_albedo_0_sampler: sampler;
+/// Albedo texture array — 4 layers (Grass=0, Dirt=1, Rock=2, Snow=3), sRGB.
+@group(#{MATERIAL_BIND_GROUP}) @binding(102) var albedo_array: texture_2d_array<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(103) var albedo_array_sampler: sampler;
 
-/// Layer 1 (dirt) albedo — tiling, sRGB.
-@group(#{MATERIAL_BIND_GROUP}) @binding(104) var layer_albedo_1: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(105) var layer_albedo_1_sampler: sampler;
-
-/// Layer 2 (rock) albedo — tiling, sRGB.
-@group(#{MATERIAL_BIND_GROUP}) @binding(106) var layer_albedo_2: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(107) var layer_albedo_2_sampler: sampler;
-
-/// Layer 3 (snow) albedo — tiling, sRGB.
-@group(#{MATERIAL_BIND_GROUP}) @binding(108) var layer_albedo_3: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(109) var layer_albedo_3_sampler: sampler;
-
-/// Layer 0 (grass) tangent-space normal map — tiling, linear.
-@group(#{MATERIAL_BIND_GROUP}) @binding(110) var layer_normal_0: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(111) var layer_normal_0_sampler: sampler;
-
-/// Layer 1 (dirt) tangent-space normal map — tiling, linear.
-@group(#{MATERIAL_BIND_GROUP}) @binding(112) var layer_normal_1: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(113) var layer_normal_1_sampler: sampler;
-
-/// Layer 2 (rock) tangent-space normal map — tiling, linear.
-@group(#{MATERIAL_BIND_GROUP}) @binding(114) var layer_normal_2: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(115) var layer_normal_2_sampler: sampler;
-
-/// Layer 3 (snow) tangent-space normal map — tiling, linear.
-@group(#{MATERIAL_BIND_GROUP}) @binding(116) var layer_normal_3: texture_2d<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(117) var layer_normal_3_sampler: sampler;
+/// Normal map texture array — 4 layers (Grass=0, Dirt=1, Rock=2, Snow=3), linear.
+@group(#{MATERIAL_BIND_GROUP}) @binding(104) var normal_array: texture_2d_array<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(105) var normal_array_sampler: sampler;
 
 struct SplatUniforms {
     /// How many times the tiling textures repeat across the terrain.
@@ -89,6 +73,8 @@ struct SplatUniforms {
     triplanar_sharpness: f32,
 }
 
+@group(#{MATERIAL_BIND_GROUP}) @binding(106) var<uniform> splat_uniforms: SplatUniforms;
+
 // ---------------------------------------------------------------------------
 // Triplanar helpers (used for the Rock layer only)
 // ---------------------------------------------------------------------------
@@ -100,18 +86,19 @@ fn triplanar_weights(world_normal: vec3<f32>, k: f32) -> vec3<f32> {
     return w / (w.x + w.y + w.z + 0.0001);
 }
 
-/// Sample a texture using triplanar world-space projection and return vec4.
-/// Three lookups — YZ, XZ, XY planes — are blended by `weights`.
+/// Sample a texture array layer using triplanar world-space projection and
+/// return vec4.  Three lookups — YZ, XZ, XY planes — are blended by `weights`.
 fn triplanar_albedo(
-    tex: texture_2d<f32>,
+    tex: texture_2d_array<f32>,
     samp: sampler,
+    layer: i32,
     world_pos: vec3<f32>,
     scale: f32,
     weights: vec3<f32>,
 ) -> vec4<f32> {
-    let col_x = textureSample(tex, samp, fract(world_pos.zy * scale));
-    let col_y = textureSample(tex, samp, fract(world_pos.xz * scale));
-    let col_z = textureSample(tex, samp, fract(world_pos.xy * scale));
+    let col_x = textureSample(tex, samp, fract(world_pos.zy * scale), layer);
+    let col_y = textureSample(tex, samp, fract(world_pos.xz * scale), layer);
+    let col_z = textureSample(tex, samp, fract(world_pos.xy * scale), layer);
     return col_x * weights.x + col_y * weights.y + col_z * weights.z;
 }
 
@@ -120,7 +107,8 @@ fn decode_normal(encoded: vec3<f32>) -> vec3<f32> {
     return encoded * 2.0 - 1.0;
 }
 
-/// Sample a normal map using triplanar projection and return a world-space normal.
+/// Sample a normal map array layer using triplanar projection and return a
+/// world-space normal.
 ///
 /// Each projection plane gets its own synthesized TBN so that cliff-face
 /// normals (dominant X/Z contribution) are decoded relative to the correct
@@ -137,8 +125,9 @@ fn decode_normal(encoded: vec3<f32>) -> vec3<f32> {
 /// right-handed and preventing the "inside-out" normal-map artefact on faces
 /// whose surface normal points in a negative axis direction.
 fn triplanar_normal_world(
-    tex: texture_2d<f32>,
+    tex: texture_2d_array<f32>,
     samp: sampler,
+    layer: i32,
     world_pos: vec3<f32>,
     world_normal: vec3<f32>,
     scale: f32,
@@ -148,9 +137,9 @@ fn triplanar_normal_world(
     let sign_y = select(-1.0, 1.0, world_normal.y >= 0.0);
     let sign_z = select(-1.0, 1.0, world_normal.z >= 0.0);
 
-    let tn_x = decode_normal(textureSample(tex, samp, fract(world_pos.zy * scale)).rgb);
-    let tn_y = decode_normal(textureSample(tex, samp, fract(world_pos.xz * scale)).rgb);
-    let tn_z = decode_normal(textureSample(tex, samp, fract(world_pos.xy * scale)).rgb);
+    let tn_x = decode_normal(textureSample(tex, samp, fract(world_pos.zy * scale), layer).rgb);
+    let tn_y = decode_normal(textureSample(tex, samp, fract(world_pos.xz * scale), layer).rgb);
+    let tn_z = decode_normal(textureSample(tex, samp, fract(world_pos.xy * scale), layer).rgb);
 
     // Reproject each tangent-space normal into world space via the per-face TBN.
     // Derivation: world = tx·T + ty·B + tz·N, with T/B chosen for right-handedness.
@@ -163,8 +152,6 @@ fn triplanar_normal_world(
 
     return normalize(wn_x * weights.x + wn_y * weights.y + wn_z * weights.z);
 }
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(118) var<uniform> splat_uniforms: SplatUniforms;
 
 // ---------------------------------------------------------------------------
 // Fragment entry point
@@ -201,7 +188,7 @@ fn fragment(
         let safe_sum = select(raw_sum, 1.0, no_coverage);
         let weights = select(raw_weights / safe_sum, vec4<f32>(0.0, 0.0, 1.0, 0.0), no_coverage);
 
-        // Tiled UV wraps at each tile boundary (used by grass, dirt, snow).
+        // Tiled UV wraps at each tile boundary (used by Grass, Dirt, Snow).
         let tiled_uv = fract(in.uv * splat_uniforms.tile_scale);
 
         // Triplanar data for the Rock layer — computed once, shared by albedo
@@ -213,16 +200,16 @@ fn fragment(
         );
 
         // --- Albedo blend ---------------------------------------------------
-        // Grass, Dirt, Snow use standard top-down tiled UVs (1 lookup each).
-        // Rock uses triplanar world-space projection (3 lookups) to eliminate
-        // texture stretching on steep cliff faces.
-        let a0 = textureSample(layer_albedo_0, layer_albedo_0_sampler, tiled_uv);
-        let a1 = textureSample(layer_albedo_1, layer_albedo_1_sampler, tiled_uv);
+        // Grass (0), Dirt (1), Snow (3) use standard top-down tiled UVs.
+        // Rock (2) uses triplanar world-space projection to eliminate stretching
+        // on steep cliff faces.
+        let a0 = textureSample(albedo_array, albedo_array_sampler, tiled_uv, 0);
+        let a1 = textureSample(albedo_array, albedo_array_sampler, tiled_uv, 1);
         let a2 = triplanar_albedo(
-            layer_albedo_2, layer_albedo_2_sampler,
+            albedo_array, albedo_array_sampler, 2,
             world_pos, splat_uniforms.triplanar_scale, tp_weights,
         );
-        let a3 = textureSample(layer_albedo_3, layer_albedo_3_sampler, tiled_uv);
+        let a3 = textureSample(albedo_array, albedo_array_sampler, tiled_uv, 3);
 
         pbr_input.material.base_color =
             a0 * weights.r + a1 * weights.g + a2 * weights.b + a3 * weights.a;
@@ -236,16 +223,16 @@ fn fragment(
         let tbn = calculate_tbn_mikktspace(in.world_normal, in.world_tangent);
 
         // Convert packed tangent-space normals → world space via the mesh TBN.
-        let n0 = textureSample(layer_normal_0, layer_normal_0_sampler, tiled_uv).rgb;
-        let n1 = textureSample(layer_normal_1, layer_normal_1_sampler, tiled_uv).rgb;
-        let n3 = textureSample(layer_normal_3, layer_normal_3_sampler, tiled_uv).rgb;
+        let n0 = textureSample(normal_array, normal_array_sampler, tiled_uv, 0).rgb;
+        let n1 = textureSample(normal_array, normal_array_sampler, tiled_uv, 1).rgb;
+        let n3 = textureSample(normal_array, normal_array_sampler, tiled_uv, 3).rgb;
         let wn0 = apply_normal_mapping(0u, tbn, false, is_front, n0);
         let wn1 = apply_normal_mapping(0u, tbn, false, is_front, n1);
         let wn3 = apply_normal_mapping(0u, tbn, false, is_front, n3);
 
         // Rock: triplanar world-space conversion per projection plane.
         let wn2 = triplanar_normal_world(
-            layer_normal_2, layer_normal_2_sampler,
+            normal_array, normal_array_sampler, 2,
             world_pos, in.world_normal, splat_uniforms.triplanar_scale, tp_weights,
         );
 

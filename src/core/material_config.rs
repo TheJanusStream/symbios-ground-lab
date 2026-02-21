@@ -146,7 +146,9 @@ impl Default for MaterialConfig {
 #[derive(Resource)]
 pub struct MaterialState {
     /// GPU handle for the albedo texture of each layer (filled as async tasks
-    /// complete; `None` until the layer is ready).
+    /// complete; `None` until the layer is ready).  These individual images are
+    /// retained so the texture arrays can be rebuilt whenever only the splat
+    /// weights change (heightmap update) without re-running texture generation.
     pub layer_albedo: [Option<Handle<Image>>; 4],
     /// GPU handle for the normal map of each layer.
     pub layer_normal: [Option<Handle<Image>>; 4],
@@ -154,6 +156,14 @@ pub struct MaterialState {
     /// Handle to the splat weight map currently bound to the terrain material.
     /// `None` until the first splat application completes.
     pub weight_map: Option<Handle<Image>>,
+
+    /// Handle to the 4-layer albedo texture array currently bound to the terrain
+    /// material.  `None` until the first splat application completes.
+    pub albedo_array: Option<Handle<Image>>,
+
+    /// Handle to the 4-layer normal texture array currently bound to the terrain
+    /// material.  `None` until the first splat application completes.
+    pub normal_array: Option<Handle<Image>>,
 
     /// `true` when procedural texture parameters changed and textures must be
     /// re-generated from scratch.
@@ -183,6 +193,8 @@ impl Default for MaterialState {
             layer_albedo: [None, None, None, None],
             layer_normal: [None, None, None, None],
             weight_map: None,
+            albedo_array: None,
+            normal_array: None,
             // Start dirty so textures are generated on the first frame.
             textures_dirty: true,
             splat_dirty: false,

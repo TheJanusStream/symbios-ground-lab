@@ -3,22 +3,21 @@
 //!
 //! The extension binds:
 //! - a RGBA splat weight map (terrain UV space, one texel per heightmap cell)
-//! - four tiling albedo textures (one per layer)
-//! - four tiling tangent-space normal maps (one per layer)
-//! - a uniform carrying `tile_scale` and `enabled`
+//! - one tiling albedo texture array (4 layers: Grass, Dirt, Rock, Snow)
+//! - one tiling normal map texture array (4 layers)
+//! - a uniform carrying `tile_scale`, `enabled`, `triplanar_scale`, and `triplanar_sharpness`
+//!
+//! Using texture arrays instead of 8 discrete texture bindings reduces the
+//! active texture unit count from 9 down to 3, safely fitting within the
+//! WebGL 2 minimum guarantee of 16 texture image units even when Bevy's
+//! StandardMaterial pipeline and any global shadow maps are included.
 //!
 //! Bind-group slot layout (group 2, slots 100 +):
 //! ```text
 //! 100/101  weight_map + sampler
-//! 102/103  layer_albedo_0 + sampler
-//! 104/105  layer_albedo_1 + sampler
-//! 106/107  layer_albedo_2 + sampler
-//! 108/109  layer_albedo_3 + sampler
-//! 110/111  layer_normal_0 + sampler
-//! 112/113  layer_normal_1 + sampler
-//! 114/115  layer_normal_2 + sampler
-//! 116/117  layer_normal_3 + sampler
-//! 118      SplatUniforms uniform
+//! 102/103  albedo_array (texture_2d_array, 4 layers) + sampler
+//! 104/105  normal_array (texture_2d_array, 4 layers) + sampler
+//! 106      SplatUniforms uniform
 //! ```
 
 use bevy::{
@@ -51,11 +50,14 @@ pub struct SplatUniforms {
 
 /// The [`MaterialExtension`] that drives the splat shader.
 ///
-/// All nine textures are non-optional `Handle<Image>`.  When a handle points
-/// to an asset that has not yet been loaded, Bevy's `AsBindGroup` machinery
-/// automatically substitutes a 1×1 white fallback image so the bind group
-/// creation never fails.  Set `uniforms.enabled = 0` to suppress the splat
-/// logic while textures are still loading.
+/// The two texture arrays (`albedo_array`, `normal_array`) each contain 4
+/// layers in order: Grass (0), Dirt (1), Rock (2), Snow (3).
+///
+/// All handles are non-optional.  When a handle points to an asset that has
+/// not yet been loaded, Bevy's `AsBindGroup` machinery automatically
+/// substitutes a 1×1 white fallback image so the bind group creation never
+/// fails.  Set `uniforms.enabled = 0` to suppress the splat logic while
+/// arrays are being built.
 #[derive(Asset, TypePath, AsBindGroup, Clone, Default)]
 pub struct SplatExtension {
     /// Splat weight map (terrain UV space, RGBA8Unorm).
@@ -63,39 +65,17 @@ pub struct SplatExtension {
     #[sampler(101)]
     pub weight_map: Handle<Image>,
 
-    #[texture(102)]
+    /// Albedo texture array — 4 layers (Grass=0, Dirt=1, Rock=2, Snow=3), sRGB.
+    #[texture(102, dimension = "2d_array")]
     #[sampler(103)]
-    pub layer_albedo_0: Handle<Image>,
+    pub albedo_array: Handle<Image>,
 
-    #[texture(104)]
+    /// Normal map texture array — 4 layers, linear.
+    #[texture(104, dimension = "2d_array")]
     #[sampler(105)]
-    pub layer_albedo_1: Handle<Image>,
+    pub normal_array: Handle<Image>,
 
-    #[texture(106)]
-    #[sampler(107)]
-    pub layer_albedo_2: Handle<Image>,
-
-    #[texture(108)]
-    #[sampler(109)]
-    pub layer_albedo_3: Handle<Image>,
-
-    #[texture(110)]
-    #[sampler(111)]
-    pub layer_normal_0: Handle<Image>,
-
-    #[texture(112)]
-    #[sampler(113)]
-    pub layer_normal_1: Handle<Image>,
-
-    #[texture(114)]
-    #[sampler(115)]
-    pub layer_normal_2: Handle<Image>,
-
-    #[texture(116)]
-    #[sampler(117)]
-    pub layer_normal_3: Handle<Image>,
-
-    #[uniform(118)]
+    #[uniform(106)]
     pub uniforms: SplatUniforms,
 }
 

@@ -13,8 +13,9 @@
 //!    entity.  No bytes are copied to the CPU — the images stay on the GPU.
 //! 5. [`apply_splat_material`] runs once `splat_dirty` is set and all layer
 //!    handles are available: it generates a [`SplatMapper`] weight map,
-//!    uploads it as a GPU texture, and updates the terrain's
-//!    [`SplatTerrainMaterial`] extension with all nine texture handles.
+//!    uploads it as a GPU texture, merges the four per-layer images into two
+//!    [`texture_2d_array`] assets (albedo + normal), and updates the terrain's
+//!    [`SplatTerrainMaterial`] extension with the three texture handles.
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -183,10 +184,50 @@ pub fn collect_texture_results(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Texture array helpers
+// ---------------------------------------------------------------------------
+
+/// Reads the raw pixel data from four individual layer images and concatenates
+/// them into a single flat buffer suitable for a `texture_2d_array`.
+///
+/// Returns `None` if any handle is missing, any image is absent from the
+/// asset store, or any image has no CPU-side data (e.g. because it was
+/// uploaded as `RENDER_WORLD`-only).
+///
+/// The format and dimensions are inferred from the first layer and returned
+/// alongside the merged data so the caller can construct the array [`Image`].
+fn collect_layer_data(
+    handles: &[Option<Handle<Image>>; 4],
+    images: &Assets<Image>,
+) -> Option<(Vec<u8>, TextureFormat, u32, u32)> {
+    let first = images.get(handles[0].as_ref()?.id())?;
+    let format = first.texture_descriptor.format;
+    let w = first.texture_descriptor.size.width;
+    let h = first.texture_descriptor.size.height;
+    let bytes_per_layer = first.data.as_ref()?.len();
+
+    let mut merged = Vec::with_capacity(bytes_per_layer * 4);
+    for h_opt in handles {
+        let img = images.get(h_opt.as_ref()?.id())?;
+        merged.extend_from_slice(img.data.as_ref()?);
+    }
+    Some((merged, format, w, h))
+}
+
+// ---------------------------------------------------------------------------
+// Main apply system
+// ---------------------------------------------------------------------------
+
 /// Generates the [`SplatMapper`] weight map from the current heightmap,
-/// uploads it as a GPU texture, and updates the terrain's
-/// [`SplatTerrainMaterial`] with all layer handles so the fragment shader
-/// can blend them per-pixel.
+/// merges four per-layer images into two texture arrays (albedo + normal),
+/// uploads both as GPU textures, and updates the terrain's
+/// [`SplatTerrainMaterial`] with the three texture handles so the fragment
+/// shader can blend them per-pixel.
+///
+/// Using texture arrays instead of eight discrete bindings keeps the active
+/// texture unit count at 3, safely within the WebGL 2 minimum of 16 even
+/// after Bevy's StandardMaterial and any global resources consume their share.
 pub fn apply_splat_material(
     mut mat_state: ResMut<MaterialState>,
     mat_config: Res<MaterialConfig>,
@@ -222,6 +263,58 @@ pub fn apply_splat_material(
     let Some(hm) = &current_hm.0 else {
         return;
     };
+
+    // --- Collect per-layer image data into merged arrays --------------------
+    // We read the CPU-side pixel data from the four individual layer images
+    // (which retain MAIN_WORLD data because bevy_symbios_texture uses the
+    // default RenderAssetUsages) and concatenate them into a flat buffer that
+    // Image::new interprets as a texture_2d_array with depth_or_array_layers=4.
+    //
+    // The immutable borrows of `images` (via `collect_layer_data`) are released
+    // before the mutable `images.add` / `images.remove` calls below.
+    let Some((albedo_data, albedo_format, tex_w, tex_h)) =
+        collect_layer_data(&mat_state.layer_albedo, &images)
+    else {
+        // Layer images not yet available in the asset store — retry next frame.
+        return;
+    };
+    let Some((normal_data, normal_format, _, _)) =
+        collect_layer_data(&mat_state.layer_normal, &images)
+    else {
+        return;
+    };
+
+    // Remove old arrays to free GPU memory before uploading new ones.
+    if let Some(old) = mat_state.albedo_array.take() {
+        images.remove(old.id());
+    }
+    if let Some(old) = mat_state.normal_array.take() {
+        images.remove(old.id());
+    }
+
+    let array_extent = Extent3d {
+        width: tex_w,
+        height: tex_h,
+        depth_or_array_layers: 4,
+    };
+
+    let albedo_array = images.add(Image::new(
+        array_extent,
+        TextureDimension::D2,
+        albedo_data,
+        albedo_format,
+        RenderAssetUsages::RENDER_WORLD,
+    ));
+    let normal_array = images.add(Image::new(
+        array_extent,
+        TextureDimension::D2,
+        normal_data,
+        normal_format,
+        RenderAssetUsages::RENDER_WORLD,
+    ));
+
+    mat_state.albedo_array = Some(albedo_array.clone());
+    mat_state.normal_array = Some(normal_array.clone());
 
     // --- Splat weight map ---------------------------------------------------
     // Rules are authored in normalised [0, 1] space and scaled by height_scale.
@@ -281,16 +374,8 @@ pub fn apply_splat_material(
         mat.base.metallic = 0.0;
 
         mat.extension.weight_map = wm_handle;
-
-        mat.extension.layer_albedo_0 = mat_state.layer_albedo[0].clone().unwrap_or_default();
-        mat.extension.layer_albedo_1 = mat_state.layer_albedo[1].clone().unwrap_or_default();
-        mat.extension.layer_albedo_2 = mat_state.layer_albedo[2].clone().unwrap_or_default();
-        mat.extension.layer_albedo_3 = mat_state.layer_albedo[3].clone().unwrap_or_default();
-
-        mat.extension.layer_normal_0 = mat_state.layer_normal[0].clone().unwrap_or_default();
-        mat.extension.layer_normal_1 = mat_state.layer_normal[1].clone().unwrap_or_default();
-        mat.extension.layer_normal_2 = mat_state.layer_normal[2].clone().unwrap_or_default();
-        mat.extension.layer_normal_3 = mat_state.layer_normal[3].clone().unwrap_or_default();
+        mat.extension.albedo_array = albedo_array;
+        mat.extension.normal_array = normal_array;
 
         let world_extent = (terrain_config.grid_size - 1) as f32 * terrain_config.cell_scale;
         mat.extension.uniforms = SplatUniforms {
