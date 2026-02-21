@@ -30,7 +30,7 @@ pub fn setup_scene(mut commands: Commands) {
         PanOrbitCamera {
             focus: Vec3::ZERO,
             radius: Some(300.0),
-            pitch: Some(-std::f32::consts::FRAC_PI_6),
+            pitch: Some(std::f32::consts::FRAC_PI_6),
             yaw: Some(std::f32::consts::FRAC_PI_4),
             button_orbit: MouseButton::Right,
             button_pan: MouseButton::Middle,

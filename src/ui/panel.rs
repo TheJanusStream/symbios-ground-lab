@@ -37,6 +37,7 @@ pub fn render_ui(
 
     egui::Window::new("Terraformer")
         .default_width(320.0)
+        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(10.0, 10.0))
         .show(ctx, |ui| {
             // ── Grid / World ──────────────────────────────────────────────
             egui::CollapsingHeader::new("Grid / World")
