@@ -28,7 +28,7 @@ pub fn setup_scene(mut commands: Commands) {
     // Camera – orbit centred on the terrain, tilted 30° down
     commands.spawn((
         PanOrbitCamera {
-            focus: Vec3::new(128.0, 0.0, 128.0),
+            focus: Vec3::ZERO,
             radius: Some(300.0),
             pitch: Some(-std::f32::consts::FRAC_PI_6),
             yaw: Some(std::f32::consts::FRAC_PI_4),

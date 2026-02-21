@@ -85,7 +85,8 @@ pub fn rebuild_terrain(
         } else {
             mesh3d.0 = meshes.add(mesh.clone());
         }
-        transform.translation = Vec3::ZERO;
+        let half = world_extent * 0.5;
+        transform.translation = Vec3::new(-half, 0.0, -half);
     }
 
     dirty_mesh.0 = false;
