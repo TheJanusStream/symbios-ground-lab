@@ -45,8 +45,8 @@ jobs:
             --no-typescript \
             target/wasm32-unknown-unknown/release/symbios-ground-lab.wasm
 
-      - name: Optimize WASM
-        run: wasm-opt -Oz -o ./dist/symbios-ground-lab_bg.wasm ./dist/symbios-ground-lab_bg.wasm
+      #- name: Optimize WASM
+      #  run: wasm-opt -Oz -o ./dist/symbios-ground-lab_bg.wasm ./dist/symbios-ground-lab_bg.wasm
 
       - name: Assemble Site
         run: |
