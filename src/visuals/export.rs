@@ -9,6 +9,8 @@ use crate::core::config::{ExportStatus, ExportTask, TerrainConfig};
 // Platform-agnostic file I/O
 // ---------------------------------------------------------------------------
 
+/// Write a UTF-8 string to `exports/<filename>`, creating the directory if
+/// needed. Returns `Err` with a human-readable message on failure.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn save_file(filename: &str, content: &str) -> Result<(), String> {
     use std::{fs, path::Path};
@@ -20,11 +22,14 @@ pub fn save_file(filename: &str, content: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// WASM: delegate to [`save_file_binary`] via UTF-8 byte conversion.
 #[cfg(target_arch = "wasm32")]
 pub fn save_file(filename: &str, content: &str) -> Result<(), String> {
     save_file_binary(filename, content.as_bytes())
 }
 
+/// Write raw bytes to `exports/<filename>`, creating the directory if needed.
+/// Returns `Err` with a human-readable message on failure.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     use std::{fs, path::Path};
@@ -36,6 +41,9 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// WASM: wrap bytes in a Blob, create an object URL, trigger a synthetic
+/// anchor click to initiate the browser download, then schedule URL revocation
+/// after 60 seconds to avoid unbounded memory growth from repeated exports.
 #[cfg(target_arch = "wasm32")]
 pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     use wasm_bindgen::JsCast;
@@ -80,6 +88,12 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
 // Issue #6: 16-bit PNG heightmap export
 // ---------------------------------------------------------------------------
 
+/// Export the heightmap as a 16-bit greyscale PNG.
+///
+/// Heights are normalised to the current `[min, max]` range so the full
+/// 16-bit dynamic range (`[0, 65535]`) is always utilised. The file is written
+/// to `exports/heightmap.png` and `status` is updated to reflect success or
+/// failure.
 pub fn export_heightmap_png(hm: &HeightMap, status: &mut ExportStatus) {
     use image::{ImageBuffer, Luma};
     use std::io::Cursor;
@@ -163,6 +177,12 @@ mod tests {
     }
 }
 
+/// Serialise a heightmap to the Wavefront OBJ format.
+///
+/// Emits vertex positions (`v`), UV coordinates (`vt`, normalised to `[0, 1]`),
+/// per-vertex normals computed via central differences (`vn`), and triangulated
+/// quad faces (`f`) with combined vertex/UV/normal indices. The output is
+/// suitable for import into any DCC tool that understands OBJ.
 fn heightmap_to_obj(hm: &HeightMap) -> String {
     let w = hm.width();
     let h = hm.height();
@@ -226,6 +246,13 @@ fn heightmap_to_obj(hm: &HeightMap) -> String {
 // Issue #8: JSON config/metadata export
 // ---------------------------------------------------------------------------
 
+/// Export the current [`TerrainConfig`] plus derived metadata as a
+/// pretty-printed JSON file (`exports/terrain.json`).
+///
+/// If a heightmap is provided, the metadata includes the actual grid
+/// dimensions, world extents, and measured height range. Otherwise, the values
+/// are estimated from `config` alone. `status` is updated to reflect success
+/// or failure.
 pub fn export_json(config: &TerrainConfig, hm: Option<&HeightMap>, status: &mut ExportStatus) {
     #[derive(serde::Serialize)]
     struct Export<'a> {

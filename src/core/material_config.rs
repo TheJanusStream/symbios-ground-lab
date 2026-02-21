@@ -189,16 +189,25 @@ impl Default for MaterialState {
 }
 
 impl MaterialState {
+    /// Returns `true` when every layer has both an albedo and a normal-map
+    /// handle available — i.e. all four async texture tasks have completed.
     pub fn all_layers_ready(&self) -> bool {
         self.layer_albedo.iter().all(|d| d.is_some())
             && self.layer_normal.iter().all(|d| d.is_some())
     }
 }
 
+/// Display state for the material pipeline, shown in the Materials panel.
 #[derive(Default, Clone, PartialEq)]
 pub enum MaterialStatus {
+    /// No pipeline activity. Shown on startup and after a completed or
+    /// cancelled generation.
     #[default]
     Idle,
+    /// Async texture tasks are in flight. The panel shows a spinner and the
+    /// count of completed layers.
     GeneratingTextures,
+    /// All four layers are generated and the splat material is applied to the
+    /// terrain.
     Ready,
 }

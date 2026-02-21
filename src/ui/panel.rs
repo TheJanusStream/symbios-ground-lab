@@ -8,6 +8,16 @@ use crate::core::config::{
 use crate::logic::erosion_viz::start_erosion_viz;
 use crate::visuals::export::{export_heightmap_png, export_json, spawn_obj_export};
 
+/// Render the main "Terraformer" egui window.
+///
+/// This system runs every frame in the [`EguiPrimaryContextPass`] schedule.
+/// It ticks the terrain-generation debounce timer and draws collapsible
+/// sections for Grid/World settings, Generator selection, Hydraulic Erosion,
+/// and Thermal Erosion parameters, followed by status indicators, action
+/// buttons (Regenerate, Visualise Erosion, Stop Viz), and an Export panel.
+///
+/// UI changes are fed back into [`TerrainConfig`] immediately; a 400 ms
+/// debounce prevents rapid slider drags from saturating the generation pool.
 #[allow(clippy::too_many_arguments)]
 pub fn render_ui(
     mut contexts: EguiContexts,

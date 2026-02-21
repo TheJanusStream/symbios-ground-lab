@@ -7,9 +7,19 @@ use symbios_ground::HeightMap;
 /// Which base terrain generation algorithm to use.
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum GeneratorKind {
+    /// Fractional Brownian Motion: layers of coherent noise summed across
+    /// multiple octaves, each scaled by persistence and lacunarity. Produces
+    /// smooth, naturalistic terrain with controllable detail and roughness.
     #[default]
     FbmNoise,
+    /// Diamond-Square mid-point displacement. Recursively subdivides the grid
+    /// and perturbs mid-points by a decreasing random offset, producing
+    /// realistic ridge-and-valley topology. The `ds_roughness` parameter
+    /// controls how quickly the perturbation amplitude shrinks across levels.
     DiamondSquare,
+    /// Voronoi-cell terracing. Assigns each grid cell to its nearest seed
+    /// point and quantises the resulting distance field into a fixed number of
+    /// stepped terraces, producing a stylised, plateaued appearance.
     VoronoiTerracing,
 }
 

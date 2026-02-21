@@ -3,6 +3,12 @@ use bevy::post_process::bloom::Bloom;
 use bevy::prelude::*;
 use bevy_panorbit_camera::PanOrbitCamera;
 
+/// Spawn the initial scene: a warm directional sun, ambient fill light, and
+/// an orbit camera centred on the world origin.
+///
+/// Runs once at [`Startup`] before [`spawn_terrain`](super::terrain::spawn_terrain).
+/// The camera focus is `Vec3::ZERO`; the terrain mesh is always centred there
+/// regardless of its grid dimensions.
 pub fn setup_scene(mut commands: Commands) {
     // Directional light (warm sun from the upper-right)
     commands.spawn((

@@ -228,6 +228,11 @@ pub fn step_erosion_viz(
     }
 }
 
+/// Compute the four bilinear interpolation weights for fractional offsets
+/// `(fx, fz)` within a grid cell.
+///
+/// Returns `(w00, w10, w01, w11)` corresponding to the corners
+/// `(x, z)`, `(x+1, z)`, `(x, z+1)`, `(x+1, z+1)`. The weights sum to 1.
 #[inline]
 fn bilinear_weights(fx: f32, fz: f32) -> (f32, f32, f32, f32) {
     (
