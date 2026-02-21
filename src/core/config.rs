@@ -184,7 +184,7 @@ impl Default for ErosionVizState {
             total: 0,
             steps_per_frame: 8,
             drops_per_frame: 32,
-            publish_every_n_frames: 6,
+            publish_every_n_frames: 15,
             frame_counter: 0,
             config: TerrainConfig::default(),
         }

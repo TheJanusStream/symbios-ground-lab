@@ -48,13 +48,23 @@ pub struct TextureLayerIndex(pub usize);
 /// Texture-dirty is set explicitly by the UI (via [`MaterialState`]) when the
 /// user actually modifies a texture parameter, avoiding the Bevy
 /// `ResMut`-change-detection pitfall that would fire every frame.
+///
+/// During erosion visualisation the heightmap snapshot is published every N
+/// frames. Regenerating the full splat weight map on each of those publishes
+/// is expensive (512×512 SplatMapper + GPU texture upload), so we suppress
+/// splat updates while the viz is running and allow one final update once it
+/// completes.
 pub fn detect_material_dirty(
     current_hm: Res<CurrentHeightMap>,
     mut mat_state: ResMut<MaterialState>,
+    viz: Res<crate::core::config::ErosionVizState>,
 ) {
     // A new heightmap means splat weights must be recomputed, but we can
     // reuse the already-generated procedural textures.
-    if current_hm.is_changed() && current_hm.0.is_some() && !mat_state.textures_dirty {
+    // Skip during active erosion viz — allow through only on the final frame
+    // when viz.enabled has just been set to false (step_erosion_viz runs
+    // earlier in the same .chain() so the flag is already updated).
+    if current_hm.is_changed() && current_hm.0.is_some() && !mat_state.textures_dirty && !viz.enabled {
         mat_state.splat_dirty = true;
     }
 }

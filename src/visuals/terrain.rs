@@ -57,6 +57,7 @@ pub fn rebuild_terrain(
     mut meshes: ResMut<Assets<Mesh>>,
     current_hm: Res<CurrentHeightMap>,
     mut dirty_mesh: ResMut<DirtyMesh>,
+    viz: Res<crate::core::config::ErosionVizState>,
 ) {
     if !dirty_mesh.0 {
         return;
@@ -73,9 +74,13 @@ pub fn rebuild_terrain(
         .build(hm);
 
     // Generate per-vertex tangents so the fragment shader can build the TBN
-    // frame for tangent-space normal-map blending.
-    mesh.generate_tangents()
-        .expect("terrain mesh tangent generation failed");
+    // frame for tangent-space normal-map blending. Skip during active erosion
+    // viz: the splat material isn't updated mid-viz so correct tangents aren't
+    // needed until the final rebuild when viz.enabled is already false.
+    if !viz.enabled {
+        mesh.generate_tangents()
+            .expect("terrain mesh tangent generation failed");
+    }
 
     for (mut mesh3d, mut transform) in &mut query {
         // Update the existing asset buffer in-place so the old allocation is
