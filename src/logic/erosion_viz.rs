@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::tasks::AsyncComputeTaskPool;
+use bevy::tasks::futures_lite::future;
 use rand::Rng;
 use rand::SeedableRng;
 use rand_pcg::Pcg64Mcg;
@@ -8,21 +10,40 @@ use crate::core::config::{
 };
 use crate::logic::generation::generate_heightmap;
 
-/// Start the erosion visualisation: generate a base heightmap (no erosion),
-/// then begin stepping droplets frame-by-frame.
+/// Kick off the erosion visualisation.
+///
+/// Generates the base (uneroded) heightmap on the `AsyncComputeTaskPool` so
+/// the main thread (and therefore the UI and camera) never block.  The viz is
+/// not `enabled` yet — `poll_viz_init` sets that once the task completes.
 pub fn start_erosion_viz(config: &TerrainConfig, state: &mut ErosionVizState) {
     let mut cfg_no_erosion = config.clone();
     cfg_no_erosion.erosion_enabled = false;
     cfg_no_erosion.thermal_enabled = false;
-    let hm = generate_heightmap(&cfg_no_erosion);
 
-    state.heightmap = Some(hm);
+    let pool = AsyncComputeTaskPool::get();
+    let t = pool.spawn(async move { generate_heightmap(&cfg_no_erosion) });
+    state.init_task = Some(t);
+
+    // Pre-populate everything except the heightmap so the step system is ready
+    // the moment the init task delivers it.
+    state.heightmap = None;
     state.rng = Pcg64Mcg::seed_from_u64(config.seed);
     state.active.clear();
     state.completed = 0;
     state.total = config.erosion_drops;
     state.config = config.clone();
-    state.enabled = true;
+    state.enabled = false; // set to true by poll_viz_init once the task finishes
+}
+
+/// Poll the async base-heightmap task spawned by `start_erosion_viz`.
+/// When it completes, store the result and enable the visualisation.
+pub fn poll_viz_init(mut viz: ResMut<ErosionVizState>) {
+    let Some(ref mut t) = viz.init_task else { return };
+    if let Some(hm) = future::block_on(future::poll_once(t)) {
+        viz.heightmap = Some(hm);
+        viz.init_task = None;
+        viz.enabled = true;
+    }
 }
 
 /// Advance the visualisation: spawn new droplets and step existing ones.

@@ -54,6 +54,7 @@ fn main() {
             (
                 logic::generation::start_generation,
                 logic::generation::poll_generation,
+                logic::erosion_viz::poll_viz_init,
                 logic::erosion_viz::step_erosion_viz,
                 visuals::terrain::rebuild_terrain,
                 visuals::droplets::draw_droplet_gizmos,

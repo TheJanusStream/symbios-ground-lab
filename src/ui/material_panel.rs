@@ -35,8 +35,11 @@ pub fn render_material_ui(
         (ms.status.clone(), ready)
     };
 
-    // Track whether the user actually changed anything this frame.
-    let mut any_changed = false;
+    // Separate change tracking:
+    //   rules_changed  → splat weight map must be rebuilt (cheap, immediate)
+    //   texture_changed → procedural textures must be regenerated (expensive, debounced)
+    let mut rules_changed = false;
+    let mut texture_changed = false;
 
     {
         // bypass_change_detection lets us read/write MaterialConfig fields
@@ -49,18 +52,25 @@ pub fn render_material_ui(
             .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-10.0, 10.0))
             .show(ctx, |ui| {
                 // ── Enable ────────────────────────────────────────────────
+                // Toggling the enable switch requires a full rebuild of both
+                // textures and splat weights.
                 let prev = cfg.enabled;
                 ui.checkbox(&mut cfg.enabled, "Enable splat materials");
                 if cfg.enabled != prev {
-                    any_changed = true;
+                    rules_changed = true;
+                    texture_changed = true;
                 }
 
-                any_changed |= ui
+                // Returns (rules_changed, texture_changed).
+                let (inner_rules, inner_tex) = ui
                     .add_enabled_ui(cfg.enabled, |ui| {
-                        let mut ch = false;
+                        let mut rules = false;
+                        let mut tex = false;
 
                         // ── Global settings ───────────────────────────────
-                        ch |= egui::CollapsingHeader::new("Global Settings")
+                        // texture_size and tile_scale only affect procedural
+                        // texture generation, not the splat weight map.
+                        let gs = egui::CollapsingHeader::new("Global Settings")
                             .default_open(true)
                             .show(ui, |ui| {
                                 let mut inner = false;
@@ -98,35 +108,42 @@ pub fn render_material_ui(
                             })
                             .body_returned
                             .unwrap_or(false);
+                        tex |= gs;
 
                         ui.separator();
 
                         // ── Layers ────────────────────────────────────────
+                        // Each layer header returns (rules_changed, texture_changed)
+                        // so we can route the change to the right rebuild path.
                         let layer_names = ["Grass (R)", "Dirt (G)", "Rock (B)", "Snow (A)"];
 
                         for (i, name) in layer_names.iter().enumerate() {
-                            ch |= egui::CollapsingHeader::new(*name)
+                            let (lr, lt) = egui::CollapsingHeader::new(*name)
                                 .default_open(false)
                                 .show(ui, |ui| {
-                                    let mut inner = false;
-                                    inner |= show_splat_rule(ui, &mut cfg.rules[i]);
+                                    let rule_ch = show_splat_rule(ui, &mut cfg.rules[i]);
                                     ui.separator();
-                                    inner |= match i {
+                                    let tex_ch = match i {
                                         0 => show_ground_config(ui, &mut cfg.grass),
                                         1 => show_ground_config(ui, &mut cfg.dirt),
                                         2 => show_rock_config(ui, &mut cfg.rock),
                                         3 => show_ground_config(ui, &mut cfg.snow),
                                         _ => unreachable!(),
                                     };
-                                    inner
+                                    (rule_ch, tex_ch)
                                 })
                                 .body_returned
-                                .unwrap_or(false);
+                                .unwrap_or((false, false));
+                            rules |= lr;
+                            tex |= lt;
                         }
 
-                        ch
+                        (rules, tex)
                     })
                     .inner;
+
+                rules_changed |= inner_rules;
+                texture_changed |= inner_tex;
 
                 ui.separator();
 
@@ -148,14 +165,18 @@ pub fn render_material_ui(
             });
     } // cfg borrow ends here; config is accessible again
 
-    if any_changed {
-        // Notify Bevy that MaterialConfig was intentionally modified.
+    if rules_changed || texture_changed {
         config.set_changed();
-        // Start debounce instead of directly setting textures_dirty, so that
-        // continuous slider drags don't saturate the thread pool with abandoned tasks.
+    }
+    // Splat rules changed → rebuild weight map immediately (cheap CPU pass).
+    if rules_changed {
+        mat_state.splat_dirty = true;
+    }
+    // Texture params changed → debounce to avoid saturating the thread pool
+    // with abandoned generation tasks during continuous slider drags.
+    if texture_changed {
         mat_state.texture_debounce_timer.reset();
         mat_state.texture_debounce_pending = true;
-        mat_state.splat_dirty = true;
     }
 }
 

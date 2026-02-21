@@ -41,6 +41,7 @@ pub fn render_ui(
     }
 
     let is_generating = task.0.is_some();
+    let viz_initializing = viz.init_task.is_some();
     let viz_active = viz.enabled;
 
     let Ok(ctx) = contexts.ctx_mut() else { return };
@@ -241,6 +242,11 @@ pub fn render_ui(
                     ui.spinner();
                     ui.label("Generating terrain…");
                 });
+            } else if viz_initializing {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Preparing erosion viz…");
+                });
             } else if viz_active {
                 let pct = if viz.total > 0 {
                     viz.completed as f32 / viz.total as f32
@@ -264,7 +270,7 @@ pub fn render_ui(
             ui.horizontal(|ui| {
                 if ui
                     .add_enabled(
-                        !is_generating && !viz_active,
+                        !is_generating && !viz_active && !viz_initializing,
                         egui::Button::new("Regenerate"),
                     )
                     .clicked()
@@ -275,7 +281,8 @@ pub fn render_ui(
 
                 if ui
                     .add_enabled(
-                        !is_generating && !viz_active && config.erosion_enabled,
+                        !is_generating && !viz_active && !viz_initializing
+                            && config.erosion_enabled,
                         egui::Button::new("Visualise Erosion"),
                     )
                     .clicked()
@@ -284,8 +291,9 @@ pub fn render_ui(
                     start_erosion_viz(&cfg, &mut viz);
                 }
 
-                if viz_active && ui.button("Stop Viz").clicked() {
+                if (viz_active || viz_initializing) && ui.button("Stop Viz").clicked() {
                     viz.enabled = false;
+                    viz.init_task = None; // cancel pending async init
                 }
             });
 
@@ -348,6 +356,8 @@ fn slider(
 ) -> bool {
     ui.horizontal(|ui| {
         ui.label(label);
+        // egui 0.33+ defaults to SliderClamping::Always, so typed values are
+        // already clamped to the range without any extra call needed.
         ui.add(egui::Slider::new(val, range)).changed()
     })
     .inner

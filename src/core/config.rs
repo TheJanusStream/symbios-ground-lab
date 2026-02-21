@@ -159,6 +159,9 @@ pub struct ExportTask(pub Option<bevy::tasks::Task<Result<String, String>>>);
 pub struct ErosionVizState {
     /// Whether the step-by-step visualisation is active.
     pub enabled: bool,
+    /// In-flight async task that generates the base (uneroded) heightmap before
+    /// the visualisation can start.  `None` once init completes or is cancelled.
+    pub init_task: Option<Task<HeightMap>>,
     /// Working copy of the heightmap being eroded in real-time.
     pub heightmap: Option<HeightMap>,
     /// Deterministic RNG for spawning droplets.
@@ -187,6 +190,7 @@ impl Default for ErosionVizState {
         use rand::SeedableRng;
         Self {
             enabled: false,
+            init_task: None,
             heightmap: None,
             rng: Pcg64Mcg::seed_from_u64(0),
             active: Vec::new(),

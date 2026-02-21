@@ -73,14 +73,18 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     // would destroy the URL before Firefox/Safari finish their async download
     // initiation. A 60-second window is ample for any browser, and prevents
     // unbounded memory growth from repeated large (100+ MB OBJ) exports.
+    //
+    // `once_into_js` transfers ownership to JS: when the callback fires the JS
+    // GC drops the Rust-side closure, so no WASM linear-memory leak occurs.
+    // The old `Closure::once` + `forget()` pattern permanently leaked the
+    // closure allocation on every export.
     let url_to_revoke = url.clone();
-    let cb = wasm_bindgen::closure::Closure::once(move || {
+    let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
         web_sys::Url::revoke_object_url(&url_to_revoke).ok();
     });
     window
-        .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 60_000)
+        .set_timeout_with_callback_and_timeout_and_arguments_0(cb.unchecked_ref(), 60_000)
         .ok();
-    cb.forget();
     Ok(())
 }
 

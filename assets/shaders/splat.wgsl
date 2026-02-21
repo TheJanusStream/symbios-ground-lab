@@ -102,7 +102,16 @@ fn fragment(
 
     if splat_uniforms.enabled != 0u {
         // Sample splat weights from the terrain-space UV ([0, 1] → full mesh).
-        let weights = textureSample(splat_weight_map, splat_weight_sampler, in.uv);
+        let raw_weights = textureSample(splat_weight_map, splat_weight_sampler, in.uv);
+
+        // Normalise weights so they always sum to exactly 1.  SplatMapper rules
+        // can overlap or leave gaps, causing the raw sum to differ from 1.  A
+        // non-unit sum corrupts the normal decode step: encoded normals are in
+        // [0, 1] and decoded via `* 2 - 1`.  If the blended vector drifts
+        // toward (0.5, 0.5, 0.5) the decoded result is (0, 0, 0), and
+        // normalising a zero vector produces NaN that infects the whole pixel.
+        let weight_sum = max(raw_weights.r + raw_weights.g + raw_weights.b + raw_weights.a, 0.0001);
+        let weights = raw_weights / weight_sum;
 
         // Tiled UV wraps at each tile boundary.
         let tiled_uv = fract(in.uv * splat_uniforms.tile_scale);
@@ -119,7 +128,7 @@ fn fragment(
         // --- Normal-map blend -----------------------------------------------
         // Sample packed tangent-space normals ([0, 1] range) and blend before
         // decoding.  Blending pre-decode is equivalent to blending post-decode
-        // because the weights sum to 1 and the transform is linear.
+        // when the weights are normalised (unit sum, linear transform).
 #ifdef VERTEX_TANGENTS
         let n0 = textureSample(layer_normal_0, layer_normal_0_sampler, tiled_uv).rgb;
         let n1 = textureSample(layer_normal_1, layer_normal_1_sampler, tiled_uv).rgb;
