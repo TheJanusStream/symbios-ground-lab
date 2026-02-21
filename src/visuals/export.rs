@@ -151,6 +151,22 @@ pub fn spawn_png_export(hm: HeightMap, task: &mut ExportTask, status: &mut Expor
 pub fn spawn_obj_export(hm: HeightMap, task: &mut ExportTask, status: &mut ExportStatus) {
     let pool = AsyncComputeTaskPool::get();
     let t = pool.spawn(async move {
+        // A 2048×2048 OBJ is ~700 MB of text. WASM runs in a 32-bit address
+        // space; the peak allocation during string growth (old buf + new buf)
+        // exceeds available memory on that target. Reject large grids early
+        // with a clear message rather than silently crashing the page.
+        #[cfg(target_arch = "wasm32")]
+        {
+            let cells = hm.width() * hm.height();
+            if cells > 512 * 512 {
+                return Err(format!(
+                    "OBJ export on the web is limited to 512×512 grids \
+                     (current: {}×{}). Reduce the grid size and retry.",
+                    hm.width(),
+                    hm.height()
+                ));
+            }
+        }
         let obj = heightmap_to_obj(&hm);
         save_file("terrain.obj", &obj)?;
         Ok("terrain.obj".into())
@@ -203,7 +219,11 @@ mod tests {
 fn heightmap_to_obj(hm: &HeightMap) -> String {
     let w = hm.width();
     let h = hm.height();
-    let mut out = String::with_capacity(w * h * 64);
+    // ~84 bytes per vertex/UV/normal triple + ~160 bytes per quad's two face
+    // lines. Accurate pre-allocation avoids repeated doubling for mid-size
+    // grids; capped at 128 MiB so we never pre-commit huge RAM for large ones.
+    let estimated = w * h * 84 + w.saturating_sub(1) * h.saturating_sub(1) * 160;
+    let mut out = String::with_capacity(estimated.min(128 * 1024 * 1024));
 
     out.push_str("# symbios-ground-lab terrain export\n");
 

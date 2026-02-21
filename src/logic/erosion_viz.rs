@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::tasks::futures_lite::future;
@@ -90,7 +92,7 @@ pub fn step_erosion_viz(
             water: 1.0,
             sediment: 0.0,
             steps_left: 64,
-            trail: vec![Vec2::new(px, pz)],
+            trail: VecDeque::from([Vec2::new(px, pz)]),
         });
     }
 
@@ -158,9 +160,9 @@ pub fn step_erosion_viz(
             let nfx = new_px - new_ix as f32;
             let nfz = new_pz - new_iz as f32;
             let nh00 = hm.get(new_ix, new_iz);
-            let nh10 = hm.get((new_ix + 1).min(w - 1), new_iz);
-            let nh01 = hm.get(new_ix, (new_iz + 1).min(h - 1));
-            let nh11 = hm.get((new_ix + 1).min(w - 1), (new_iz + 1).min(h - 1));
+            let nh10 = hm.get(new_ix + 1, new_iz);
+            let nh01 = hm.get(new_ix, new_iz + 1);
+            let nh11 = hm.get(new_ix + 1, new_iz + 1);
             let height_new = nh00 * (1.0 - nfx) * (1.0 - nfz)
                 + nh10 * nfx * (1.0 - nfz)
                 + nh01 * (1.0 - nfx) * nfz
@@ -199,16 +201,16 @@ pub fn step_erosion_viz(
                 drop.sediment += erode;
                 let (w00, w10, w01, w11) = bilinear_weights(fx, fz);
                 let v = hm.get_mut(ix, iz);
-                *v -= erode * w00;
+                *v = (*v - erode * w00).max(0.0);
 
                 let v = hm.get_mut(ix + 1, iz);
-                *v -= erode * w10;
+                *v = (*v - erode * w10).max(0.0);
 
                 let v = hm.get_mut(ix, iz + 1);
-                *v -= erode * w01;
+                *v = (*v - erode * w01).max(0.0);
 
                 let v = hm.get_mut(ix + 1, iz + 1);
-                *v -= erode * w11;
+                *v = (*v - erode * w11).max(0.0);
             }
 
             drop.vel = (drop.vel * drop.vel + delta_h * (-9.8)).max(0.0).sqrt();
@@ -216,9 +218,9 @@ pub fn step_erosion_viz(
             drop.px = new_px;
             drop.pz = new_pz;
 
-            drop.trail.push(Vec2::new(new_px, new_pz));
+            drop.trail.push_back(Vec2::new(new_px, new_pz));
             if drop.trail.len() > 16 {
-                drop.trail.remove(0);
+                drop.trail.pop_front();
             }
         }
 

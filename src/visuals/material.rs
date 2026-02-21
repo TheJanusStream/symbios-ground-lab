@@ -221,21 +221,24 @@ pub fn apply_splat_material(
     };
 
     // --- Splat weight map ---------------------------------------------------
-    // Hydraulic erosion can deposit sediment above `height_scale`, pushing
-    // terrain heights beyond the range the splat rules were authored against.
-    // When that happens every rule evaluates to 0 weight and the GPU falls
-    // back to the near-zero denominator, producing pitch-black voids at the
-    // highest peaks.  Clamp the scale to the actual maximum so the full [0, 1]
-    // normalised rule range always covers the full terrain.
-    let actual_max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    let hs = actual_max.max(terrain_config.height_scale);
+    // Rules are authored in normalised [0, 1] space and scaled by height_scale.
+    // Erosion can push individual vertices outside [0, height_scale] (deposits
+    // above the peak, or erosion below sea level).  Clamping a copy of the
+    // heightmap before weight evaluation keeps biome boundaries stable: out-of-
+    // range vertices receive the nearest-altitude layer instead of falling
+    // outside every rule and producing pitch-black void pixels.
+    let hs = terrain_config.height_scale;
+    let mut clamped_hm = (*hm).clone();
+    for v in clamped_hm.data_mut() {
+        *v = v.clamp(0.0, hs);
+    }
     let mapper = SplatMapper::new([
         mat_config.rules[0].to_splat_rule(hs),
         mat_config.rules[1].to_splat_rule(hs),
         mat_config.rules[2].to_splat_rule(hs),
         mat_config.rules[3].to_splat_rule(hs),
     ]);
-    let weight_map = mapper.generate(hm);
+    let weight_map = mapper.generate(&clamped_hm);
 
     // Reinterpret the [u8; 4]-per-pixel buffer as a flat &[u8] via a zero-copy
     // cast (same memory, no byte-by-byte iteration), then copy once into the

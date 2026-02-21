@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::prelude::*;
 use bevy::tasks::Task;
 use rand_pcg::Pcg64Mcg;
@@ -217,5 +219,5 @@ pub struct VizDroplet {
     pub sediment: f32,
     pub steps_left: u32,
     /// Recent positions for gizmo trail.
-    pub trail: Vec<Vec2>,
+    pub trail: VecDeque<Vec2>,
 }

@@ -55,34 +55,40 @@ pub fn render_ui(
             egui::CollapsingHeader::new("Grid / World")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut changed = false;
+                    ui.add_enabled_ui(!viz_active && !viz_initializing, |ui| {
+                        let mut changed = false;
 
-                    ui.horizontal(|ui| {
-                        ui.label("Grid size");
-                        let prev = config.grid_size;
-                        egui::ComboBox::from_id_salt("grid_size")
-                            .selected_text(format!("{}×{}", config.grid_size, config.grid_size))
-                            .show_ui(ui, |ui| {
-                                for &s in &[64u32, 128, 256, 512, 1024, 2048] {
-                                    if ui
-                                        .selectable_label(config.grid_size == s, format!("{s}×{s}"))
-                                        .clicked()
-                                    {
-                                        config.grid_size = s;
+                        ui.horizontal(|ui| {
+                            ui.label("Grid size");
+                            let prev = config.grid_size;
+                            egui::ComboBox::from_id_salt("grid_size")
+                                .selected_text(format!("{}×{}", config.grid_size, config.grid_size))
+                                .show_ui(ui, |ui| {
+                                    for &s in &[64u32, 128, 256, 512, 1024, 2048] {
+                                        if ui
+                                            .selectable_label(
+                                                config.grid_size == s,
+                                                format!("{s}×{s}"),
+                                            )
+                                            .clicked()
+                                        {
+                                            config.grid_size = s;
+                                        }
                                     }
-                                }
-                            });
-                        if config.grid_size != prev {
-                            changed = true;
+                                });
+                            if config.grid_size != prev {
+                                changed = true;
+                            }
+                        });
+
+                        changed |= slider(ui, &mut config.cell_scale, "Cell scale", 0.1..=4.0);
+                        changed |=
+                            slider(ui, &mut config.height_scale, "Height scale", 1.0..=200.0);
+
+                        if changed {
+                            trigger_debounce(&mut debounce, &mut dirty);
                         }
                     });
-
-                    changed |= slider(ui, &mut config.cell_scale, "Cell scale", 0.1..=4.0);
-                    changed |= slider(ui, &mut config.height_scale, "Height scale", 1.0..=200.0);
-
-                    if changed {
-                        trigger_debounce(&mut debounce, &mut dirty);
-                    }
                 });
 
             ui.separator();
@@ -91,82 +97,103 @@ pub fn render_ui(
             egui::CollapsingHeader::new("Generator")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut changed = false;
+                    ui.add_enabled_ui(!viz_active && !viz_initializing, |ui| {
+                        let mut changed = false;
 
-                    // Algorithm picker
-                    ui.horizontal(|ui| {
-                        ui.label("Algorithm");
-                        let prev = config.generator_kind;
-                        egui::ComboBox::from_id_salt("generator_kind")
-                            .selected_text(match config.generator_kind {
-                                GeneratorKind::FbmNoise => "FBM Noise",
-                                GeneratorKind::DiamondSquare => "Diamond Square",
-                                GeneratorKind::VoronoiTerracing => "Voronoi Terracing",
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut config.generator_kind,
-                                    GeneratorKind::FbmNoise,
-                                    "FBM Noise",
+                        // Algorithm picker
+                        ui.horizontal(|ui| {
+                            ui.label("Algorithm");
+                            let prev = config.generator_kind;
+                            egui::ComboBox::from_id_salt("generator_kind")
+                                .selected_text(match config.generator_kind {
+                                    GeneratorKind::FbmNoise => "FBM Noise",
+                                    GeneratorKind::DiamondSquare => "Diamond Square",
+                                    GeneratorKind::VoronoiTerracing => "Voronoi Terracing",
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut config.generator_kind,
+                                        GeneratorKind::FbmNoise,
+                                        "FBM Noise",
+                                    );
+                                    ui.selectable_value(
+                                        &mut config.generator_kind,
+                                        GeneratorKind::DiamondSquare,
+                                        "Diamond Square",
+                                    );
+                                    ui.selectable_value(
+                                        &mut config.generator_kind,
+                                        GeneratorKind::VoronoiTerracing,
+                                        "Voronoi Terracing",
+                                    );
+                                });
+                            if config.generator_kind != prev {
+                                changed = true;
+                            }
+                        });
+
+                        // Seed is shared by all generators
+                        ui.horizontal(|ui| {
+                            ui.label("Seed");
+                            let prev = config.seed;
+                            ui.add(egui::DragValue::new(&mut config.seed).speed(1.0));
+                            if config.seed != prev {
+                                changed = true;
+                            }
+                        });
+
+                        // Algorithm-specific parameters
+                        match config.generator_kind {
+                            GeneratorKind::FbmNoise => {
+                                changed |=
+                                    int_slider(ui, &mut config.octaves, "Octaves", 1..=10);
+                                changed |= slider(
+                                    ui,
+                                    &mut config.persistence,
+                                    "Persistence",
+                                    0.1..=0.9,
                                 );
-                                ui.selectable_value(
-                                    &mut config.generator_kind,
-                                    GeneratorKind::DiamondSquare,
-                                    "Diamond Square",
+                                changed |= slider(
+                                    ui,
+                                    &mut config.lacunarity,
+                                    "Lacunarity",
+                                    1.5..=4.0,
                                 );
-                                ui.selectable_value(
-                                    &mut config.generator_kind,
-                                    GeneratorKind::VoronoiTerracing,
-                                    "Voronoi Terracing",
+                                changed |= slider(
+                                    ui,
+                                    &mut config.base_frequency,
+                                    "Frequency",
+                                    0.5..=16.0,
                                 );
-                            });
-                        if config.generator_kind != prev {
-                            changed = true;
+                            }
+                            GeneratorKind::DiamondSquare => {
+                                changed |= slider(
+                                    ui,
+                                    &mut config.ds_roughness,
+                                    "Roughness",
+                                    0.0..=1.0,
+                                );
+                            }
+                            GeneratorKind::VoronoiTerracing => {
+                                changed |= int_slider(
+                                    ui,
+                                    &mut config.voronoi_num_seeds,
+                                    "Seed points",
+                                    1..=1000,
+                                );
+                                changed |= int_slider(
+                                    ui,
+                                    &mut config.voronoi_num_terraces,
+                                    "Terraces",
+                                    1..=32,
+                                );
+                            }
+                        }
+
+                        if changed {
+                            trigger_debounce(&mut debounce, &mut dirty);
                         }
                     });
-
-                    // Seed is shared by all generators
-                    ui.horizontal(|ui| {
-                        ui.label("Seed");
-                        let prev = config.seed;
-                        ui.add(egui::DragValue::new(&mut config.seed).speed(1.0));
-                        if config.seed != prev {
-                            changed = true;
-                        }
-                    });
-
-                    // Algorithm-specific parameters
-                    match config.generator_kind {
-                        GeneratorKind::FbmNoise => {
-                            changed |= int_slider(ui, &mut config.octaves, "Octaves", 1..=10);
-                            changed |=
-                                slider(ui, &mut config.persistence, "Persistence", 0.1..=0.9);
-                            changed |= slider(ui, &mut config.lacunarity, "Lacunarity", 1.5..=4.0);
-                            changed |=
-                                slider(ui, &mut config.base_frequency, "Frequency", 0.5..=16.0);
-                        }
-                        GeneratorKind::DiamondSquare => {
-                            changed |= slider(ui, &mut config.ds_roughness, "Roughness", 0.0..=1.0);
-                        }
-                        GeneratorKind::VoronoiTerracing => {
-                            changed |= int_slider(
-                                ui,
-                                &mut config.voronoi_num_seeds,
-                                "Seed points",
-                                1..=1000,
-                            );
-                            changed |= int_slider(
-                                ui,
-                                &mut config.voronoi_num_terraces,
-                                "Terraces",
-                                1..=32,
-                            );
-                        }
-                    }
-
-                    if changed {
-                        trigger_debounce(&mut debounce, &mut dirty);
-                    }
                 });
 
             ui.separator();
@@ -175,39 +202,53 @@ pub fn render_ui(
             egui::CollapsingHeader::new("Hydraulic Erosion")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut changed = false;
+                    ui.add_enabled_ui(!viz_active && !viz_initializing, |ui| {
+                        let mut changed = false;
 
-                    changed |=
-                        checkbox(ui, &mut config.erosion_enabled, "Enable hydraulic erosion");
+                        changed |= checkbox(
+                            ui,
+                            &mut config.erosion_enabled,
+                            "Enable hydraulic erosion",
+                        );
 
-                    ui.add_enabled_ui(config.erosion_enabled, |ui| {
-                        changed |=
-                            int_slider(ui, &mut config.erosion_drops, "Drops", 1_000..=500_000);
-                        changed |= slider(ui, &mut config.inertia, "Inertia", 0.0..=0.5);
-                        changed |= slider(ui, &mut config.erosion_rate, "Erosion rate", 0.01..=1.0);
-                        changed |= slider(
-                            ui,
-                            &mut config.deposition_rate,
-                            "Deposition rate",
-                            0.01..=1.0,
-                        );
-                        changed |= slider(
-                            ui,
-                            &mut config.evaporation_rate,
-                            "Evaporation rate",
-                            0.001..=0.1,
-                        );
-                        changed |= slider(
-                            ui,
-                            &mut config.capacity_factor,
-                            "Capacity factor",
-                            1.0..=20.0,
-                        );
+                        ui.add_enabled_ui(config.erosion_enabled, |ui| {
+                            changed |= int_slider(
+                                ui,
+                                &mut config.erosion_drops,
+                                "Drops",
+                                1_000..=500_000,
+                            );
+                            changed |= slider(ui, &mut config.inertia, "Inertia", 0.0..=0.5);
+                            changed |= slider(
+                                ui,
+                                &mut config.erosion_rate,
+                                "Erosion rate",
+                                0.01..=1.0,
+                            );
+                            changed |= slider(
+                                ui,
+                                &mut config.deposition_rate,
+                                "Deposition rate",
+                                0.01..=1.0,
+                            );
+                            changed |= slider(
+                                ui,
+                                &mut config.evaporation_rate,
+                                "Evaporation rate",
+                                0.001..=0.1,
+                            );
+                            changed |= slider(
+                                ui,
+                                &mut config.capacity_factor,
+                                "Capacity factor",
+                                1.0..=20.0,
+                            );
+                        });
+
+                        if changed {
+                            trigger_debounce(&mut debounce, &mut dirty);
+                        }
                     });
-
-                    if changed {
-                        trigger_debounce(&mut debounce, &mut dirty);
-                    }
                 });
 
             ui.separator();
@@ -216,23 +257,33 @@ pub fn render_ui(
             egui::CollapsingHeader::new("Thermal Erosion")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut changed = false;
-                    changed |= checkbox(ui, &mut config.thermal_enabled, "Enable thermal erosion");
-
-                    ui.add_enabled_ui(config.thermal_enabled, |ui| {
-                        changed |=
-                            int_slider(ui, &mut config.thermal_iterations, "Iterations", 1..=500);
-                        changed |= slider(
+                    ui.add_enabled_ui(!viz_active && !viz_initializing, |ui| {
+                        let mut changed = false;
+                        changed |= checkbox(
                             ui,
-                            &mut config.thermal_talus_angle,
-                            "Talus angle",
-                            0.001..=0.5,
+                            &mut config.thermal_enabled,
+                            "Enable thermal erosion",
                         );
-                    });
 
-                    if changed {
-                        trigger_debounce(&mut debounce, &mut dirty);
-                    }
+                        ui.add_enabled_ui(config.thermal_enabled, |ui| {
+                            changed |= int_slider(
+                                ui,
+                                &mut config.thermal_iterations,
+                                "Iterations",
+                                1..=500,
+                            );
+                            changed |= slider(
+                                ui,
+                                &mut config.thermal_talus_angle,
+                                "Talus angle",
+                                0.001..=0.5,
+                            );
+                        });
+
+                        if changed {
+                            trigger_debounce(&mut debounce, &mut dirty);
+                        }
+                    });
                 });
 
             ui.separator();

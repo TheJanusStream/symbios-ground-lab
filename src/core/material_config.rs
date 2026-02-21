@@ -84,7 +84,7 @@ impl Default for MaterialConfig {
 
         Self {
             enabled: true,
-            texture_size: 1024,
+            texture_size: 512,
             tile_scale: 64.0,
             rules: [
                 // R — Grass: low altitude, gentle slope
