@@ -121,8 +121,9 @@ start_generation → poll_generation → step_erosion_viz
 
 ### Performance notes
 
-- Terrain generation and OBJ export run on Bevy's `AsyncComputeTaskPool` so they never block the render thread.
-- Procedural texture generation is handled by `bevy_symbios_texture` and also runs asynchronously.
+- On **native** builds, terrain generation and PNG/OBJ export run on Bevy's `AsyncComputeTaskPool` across background threads so they never block the render thread.
+- On **WASM**, Bevy's executor multiplexes async tasks onto the single main thread. Because the CPU-bound generation and export functions contain no `.await` yield points, they run to completion the moment the task is polled and will block the browser tab during that window. The UI and camera remain frozen for the duration; this is a known limitation of single-threaded WASM.
+- Procedural texture generation is handled by `bevy_symbios_texture` and also runs asynchronously (same caveat applies on WASM).
 - During the erosion visualisation, splat weight-map regeneration and tangent computation are suppressed on intermediate frames and deferred to the final rebuild when the visualisation completes.
 
 ---

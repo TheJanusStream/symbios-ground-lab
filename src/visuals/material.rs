@@ -217,7 +217,18 @@ pub fn apply_splat_material(
     };
 
     // --- Splat weight map ---------------------------------------------------
-    let hs = terrain_config.height_scale;
+    // Hydraulic erosion can deposit sediment above `height_scale`, pushing
+    // terrain heights beyond the range the splat rules were authored against.
+    // When that happens every rule evaluates to 0 weight and the GPU falls
+    // back to the near-zero denominator, producing pitch-black voids at the
+    // highest peaks.  Clamp the scale to the actual maximum so the full [0, 1]
+    // normalised rule range always covers the full terrain.
+    let actual_max = hm
+        .data()
+        .iter()
+        .cloned()
+        .fold(f32::NEG_INFINITY, f32::max);
+    let hs = actual_max.max(terrain_config.height_scale);
     let mapper = SplatMapper::new([
         mat_config.rules[0].to_splat_rule(hs),
         mat_config.rules[1].to_splat_rule(hs),
@@ -226,12 +237,11 @@ pub fn apply_splat_material(
     ]);
     let weight_map = mapper.generate(hm);
 
-    // Flatten [u8; 4] per pixel into a contiguous byte slice.
-    let wm_bytes: Vec<u8> = weight_map
-        .data
-        .iter()
-        .flat_map(|p| p.iter().copied())
-        .collect();
+    // Reinterpret the [u8; 4]-per-pixel buffer as a flat &[u8] via a zero-copy
+    // cast (same memory, no byte-by-byte iteration), then copy once into the
+    // Vec<u8> that Image::new requires.  This avoids the per-element flat_map
+    // overhead on large weight maps.
+    let wm_bytes: Vec<u8> = bytemuck::cast_slice(&weight_map.data).to_vec();
 
     // Remove the previous weight map from the asset store.
     if let Some(old) = mat_state.weight_map.take() {

@@ -68,7 +68,17 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
         .map_err(|_| "not anchor")?;
     a.set_href(&url);
     a.set_download(filename);
+    // Attach to the document body before firing the click event.  Unattached
+    // anchor clicks work in Chrome/V8 but are silently ignored by Safari and
+    // some restrictive browser environments, causing the download to never
+    // start.  Remove immediately after — the element is only needed long
+    // enough to dispatch the event.
+    let body = document.body().ok_or("No document body")?;
+    body.append_child(&a)
+        .map_err(|e| format!("DOM append: {e:?}"))?;
     a.click();
+    body.remove_child(&a)
+        .map_err(|e| format!("DOM remove: {e:?}"))?;
     // Revoke the blob URL after a 60-second delay. Revoking synchronously
     // would destroy the URL before Firefox/Safari finish their async download
     // initiation. A 60-second window is ample for any browser, and prevents
@@ -92,40 +102,43 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
 // Issue #6: 16-bit PNG heightmap export
 // ---------------------------------------------------------------------------
 
-/// Export the heightmap as a 16-bit greyscale PNG.
+/// Spawn a background task that encodes the heightmap as a 16-bit greyscale
+/// PNG and writes it to disk, using the same `AsyncComputeTaskPool` pattern
+/// as OBJ export so the main thread is never blocked by the deflate encoder.
 ///
 /// Heights are normalised to the current `[min, max]` range so the full
-/// 16-bit dynamic range (`[0, 65535]`) is always utilised. The file is written
-/// to `exports/heightmap.png` and `status` is updated to reflect success or
-/// failure.
-pub fn export_heightmap_png(hm: &HeightMap, status: &mut ExportStatus) {
-    use image::{ImageBuffer, Luma};
-    use std::io::Cursor;
+/// 16-bit dynamic range (`[0, 65535]`) is always utilised. `status` is set to
+/// `Exporting` immediately so the UI can show a spinner.
+pub fn spawn_png_export(hm: HeightMap, task: &mut ExportTask, status: &mut ExportStatus) {
+    let pool = AsyncComputeTaskPool::get();
+    let t = pool.spawn(async move {
+        use image::{ImageBuffer, Luma};
+        use std::io::Cursor;
 
-    let w = hm.width() as u32;
-    let h = hm.height() as u32;
+        let w = hm.width() as u32;
+        let h = hm.height() as u32;
 
-    // Find the current height range for full 16-bit dynamic range
-    let min = hm.data().iter().cloned().fold(f32::INFINITY, f32::min);
-    let max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    let range = (max - min).max(f32::EPSILON);
+        // Find the current height range for full 16-bit dynamic range.
+        let min = hm.data().iter().cloned().fold(f32::INFINITY, f32::min);
+        let max = hm.data().iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        let range = (max - min).max(f32::EPSILON);
 
-    let mut img: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::new(w, h);
-    for z in 0..hm.height() {
-        for x in 0..hm.width() {
-            let val = (hm.get(x, z) - min) / range;
-            img.put_pixel(x as u32, z as u32, Luma([(val * 65535.0) as u16]));
+        let mut img: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::new(w, h);
+        for z in 0..hm.height() {
+            for x in 0..hm.width() {
+                let val = (hm.get(x, z) - min) / range;
+                img.put_pixel(x as u32, z as u32, Luma([(val * 65535.0) as u16]));
+            }
         }
-    }
 
-    let mut cursor = Cursor::new(Vec::new());
-    match img.write_to(&mut cursor, image::ImageFormat::Png) {
-        Ok(()) => match save_file_binary("heightmap.png", &cursor.into_inner()) {
-            Ok(()) => *status = ExportStatus::Done("heightmap.png".into()),
-            Err(e) => *status = ExportStatus::Error(e),
-        },
-        Err(e) => *status = ExportStatus::Error(format!("PNG encode: {e}")),
-    }
+        let mut cursor = Cursor::new(Vec::new());
+        img.write_to(&mut cursor, image::ImageFormat::Png)
+            .map_err(|e| format!("PNG encode: {e}"))?;
+        save_file_binary("heightmap.png", &cursor.into_inner())?;
+        Ok("heightmap.png".into())
+    });
+    task.0 = Some(t);
+    *status = ExportStatus::Exporting;
 }
 
 // ---------------------------------------------------------------------------

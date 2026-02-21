@@ -82,6 +82,12 @@ struct SplatUniforms {
     tile_scale: f32,
     /// Non-zero enables splat blending; zero passes through the base material.
     enabled: u32,
+    /// Explicit padding to match the 16-byte-aligned Rust `SplatUniforms`
+    /// layout (`_pad_a` and `_pad_b`).  WebGPU accepts a host buffer that is
+    /// larger than the shader struct, but keeping both sides in sync prevents
+    /// future alignment bugs when the struct is extended.
+    _pad_a: u32,
+    _pad_b: u32,
 }
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(118) var<uniform> splat_uniforms: SplatUniforms;

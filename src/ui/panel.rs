@@ -2,11 +2,11 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
 use crate::core::config::{
-    CurrentHeightMap, DirtyFlags, ErosionVizState, ExportStatus, ExportTask, GenerationTask,
-    GeneratorKind, TerrainConfig, TerrainDebounce,
+    CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, ExportStatus, ExportTask,
+    GenerationTask, GeneratorKind, TerrainConfig, TerrainDebounce,
 };
 use crate::logic::erosion_viz::start_erosion_viz;
-use crate::visuals::export::{export_heightmap_png, export_json, spawn_obj_export};
+use crate::visuals::export::{export_json, spawn_obj_export, spawn_png_export};
 
 /// Render the main "Terraformer" egui window.
 ///
@@ -28,7 +28,8 @@ pub fn render_ui(
     mut export_status: ResMut<ExportStatus>,
     mut export_task: ResMut<ExportTask>,
     task: Res<GenerationTask>,
-    current_hm: Res<CurrentHeightMap>,
+    mut current_hm: ResMut<CurrentHeightMap>,
+    mut dirty_mesh: ResMut<DirtyMesh>,
     time: Res<Time>,
 ) {
     // Tick debounce
@@ -292,6 +293,18 @@ pub fn render_ui(
                 }
 
                 if (viz_active || viz_initializing) && ui.button("Stop Viz").clicked() {
+                    // During active viz the mesh is rebuilt without tangents and
+                    // splat updates are suppressed.  Publish the latest snapshot
+                    // so `detect_material_dirty` (which runs in the same Update
+                    // chain) sees a changed heightmap and sets `splat_dirty`,
+                    // and force `dirty_mesh` so the final mesh rebuild includes
+                    // tangent generation (guarded on `!viz.enabled`).
+                    if viz_active {
+                        if let Some(snapshot) = viz.heightmap.clone() {
+                            current_hm.0 = Some(snapshot);
+                        }
+                        dirty_mesh.0 = true;
+                    }
                     viz.enabled = false;
                     viz.init_task = None; // cancel pending async init
                 }
@@ -307,10 +320,16 @@ pub fn render_ui(
                     let is_exporting = matches!(&*export_status, ExportStatus::Exporting);
                     ui.add_enabled_ui(has_hm, |ui| {
                         ui.horizontal(|ui| {
-                            if ui.button("PNG (16-bit heightmap)").clicked()
+                            if ui
+                                .add_enabled(!is_exporting, egui::Button::new("PNG (16-bit)"))
+                                .clicked()
                                 && let Some(hm) = &current_hm.0
                             {
-                                export_heightmap_png(hm, &mut export_status);
+                                spawn_png_export(
+                                    hm.clone(),
+                                    &mut export_task,
+                                    &mut export_status,
+                                );
                             }
                             if ui
                                 .add_enabled(!is_exporting, egui::Button::new("OBJ mesh"))

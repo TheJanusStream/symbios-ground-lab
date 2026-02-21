@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand_pcg = "0.9"
 image = "0.25"
+bytemuck = "1"
 
 [dev-dependencies]
 
@@ -25,6 +26,8 @@ web-sys = { version = "0.3.82", features = [
     "Window",
     "HtmlElement",
     "HtmlAnchorElement",
+    "HtmlBodyElement",
+    "Node",
     "Blob",
     "Url",
     "BlobPropertyBag",
