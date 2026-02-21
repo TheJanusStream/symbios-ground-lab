@@ -316,8 +316,8 @@ pub fn export_json(config: &TerrainConfig, hm: Option<&HeightMap>, status: &mut 
     } else {
         Metadata {
             grid_size: config.grid_size as usize,
-            world_width: config.grid_size as f32 * config.cell_scale,
-            world_depth: config.grid_size as f32 * config.cell_scale,
+            world_width: (config.grid_size - 1) as f32 * config.cell_scale,
+            world_depth: (config.grid_size - 1) as f32 * config.cell_scale,
             height_range: None,
         }
     };

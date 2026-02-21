@@ -38,12 +38,21 @@ pub fn start_erosion_viz(config: &TerrainConfig, state: &mut ErosionVizState) {
 }
 
 /// Poll the async base-heightmap task spawned by `start_erosion_viz`.
-/// When it completes, store the result and enable the visualisation.
-pub fn poll_viz_init(mut viz: ResMut<ErosionVizState>) {
+/// When it completes, store the result, publish it to `CurrentHeightMap` so
+/// the mesh immediately snaps to the un-eroded base state (preventing droplet
+/// gizmos from floating above the old eroded terrain for the first N frames),
+/// and enable the visualisation.
+pub fn poll_viz_init(
+    mut viz: ResMut<ErosionVizState>,
+    mut current_hm: ResMut<CurrentHeightMap>,
+    mut dirty_mesh: ResMut<DirtyMesh>,
+) {
     let Some(ref mut t) = viz.init_task else {
         return;
     };
     if let Some(hm) = future::block_on(future::poll_once(t)) {
+        current_hm.0 = Some(hm.clone());
+        dirty_mesh.0 = true;
         viz.heightmap = Some(hm);
         viz.init_task = None;
         viz.enabled = true;

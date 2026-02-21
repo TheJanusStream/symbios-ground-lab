@@ -223,22 +223,29 @@ pub fn apply_splat_material(
     // --- Splat weight map ---------------------------------------------------
     // Rules are authored in normalised [0, 1] space and scaled by height_scale.
     // Erosion can push individual vertices outside [0, height_scale] (deposits
-    // above the peak, or erosion below sea level).  Clamping a copy of the
-    // heightmap before weight evaluation keeps biome boundaries stable: out-of-
-    // range vertices receive the nearest-altitude layer instead of falling
-    // outside every rule and producing pitch-black void pixels.
+    // above the peak, or erosion below sea level).  Clamping before weight
+    // evaluation keeps biome boundaries stable: out-of-range vertices receive
+    // the nearest-altitude layer instead of falling outside every rule and
+    // producing pitch-black void pixels.
+    // Only clone when values are actually out of range — for a normal
+    // (non-eroded) heightmap this avoids a 1 MB+ main-thread allocation.
     let hs = terrain_config.height_scale;
-    let mut clamped_hm = (*hm).clone();
-    for v in clamped_hm.data_mut() {
-        *v = v.clamp(0.0, hs);
-    }
     let mapper = SplatMapper::new([
         mat_config.rules[0].to_splat_rule(hs),
         mat_config.rules[1].to_splat_rule(hs),
         mat_config.rules[2].to_splat_rule(hs),
         mat_config.rules[3].to_splat_rule(hs),
     ]);
-    let weight_map = mapper.generate(&clamped_hm);
+    let needs_clamp = hm.data().iter().any(|v| *v < 0.0 || *v > hs);
+    let weight_map = if needs_clamp {
+        let mut clamped_hm = (*hm).clone();
+        for v in clamped_hm.data_mut() {
+            *v = v.clamp(0.0, hs);
+        }
+        mapper.generate(&clamped_hm)
+    } else {
+        mapper.generate(hm)
+    };
 
     // Reinterpret the [u8; 4]-per-pixel buffer as a flat &[u8] via a zero-copy
     // cast (same memory, no byte-by-byte iteration), then copy once into the

@@ -68,12 +68,15 @@ pub fn render_material_ui(
                         let mut tex = false;
 
                         // ── Global settings ───────────────────────────────
-                        // texture_size and tile_scale only affect procedural
-                        // texture generation, not the splat weight map.
-                        let gs = egui::CollapsingHeader::new("Global Settings")
+                        // texture_size triggers procedural texture regeneration.
+                        // tile_scale is a shader uniform only — it must NOT
+                        // trigger texture tasks; route it to rules_changed so
+                        // only the cheap weight-map + uniform update runs.
+                        let (gs_tex, gs_rules) = egui::CollapsingHeader::new("Global Settings")
                             .default_open(true)
                             .show(ui, |ui| {
-                                let mut inner = false;
+                                let mut tex_inner = false;
+                                let mut rules_inner = false;
 
                                 let prev_sz = cfg.texture_size;
                                 ui.horizontal(|ui| {
@@ -98,17 +101,18 @@ pub fn render_material_ui(
                                         });
                                 });
                                 if cfg.texture_size != prev_sz {
-                                    inner = true;
+                                    tex_inner = true;
                                 }
 
-                                inner |=
+                                rules_inner |=
                                     f32_slider(ui, &mut cfg.tile_scale, "Tile scale", 1.0..=512.0);
 
-                                inner
+                                (tex_inner, rules_inner)
                             })
                             .body_returned
-                            .unwrap_or(false);
-                        tex |= gs;
+                            .unwrap_or((false, false));
+                        tex |= gs_tex;
+                        rules |= gs_rules;
 
                         ui.separator();
 

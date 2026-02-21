@@ -341,6 +341,9 @@ pub fn render_ui(
                     )
                     .clicked()
                 {
+                    // Cancel any pending debounce so it cannot fire a full
+                    // generation mid-visualization and overwrite the mesh.
+                    debounce.pending = false;
                     let cfg = config.clone();
                     start_erosion_viz(&cfg, &mut viz);
                 }
@@ -387,7 +390,10 @@ pub fn render_ui(
                             {
                                 spawn_obj_export(hm.clone(), &mut export_task, &mut export_status);
                             }
-                            if ui.button("JSON config").clicked() {
+                            if ui
+                                .add_enabled(!is_exporting, egui::Button::new("JSON config"))
+                                .clicked()
+                            {
                                 export_json(&config, current_hm.0.as_ref(), &mut export_status);
                             }
                         });
