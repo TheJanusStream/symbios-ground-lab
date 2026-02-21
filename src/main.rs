@@ -12,6 +12,9 @@ use symbios_ground_lab::visuals::splat_material::SplatTerrainMaterial;
 use symbios_ground_lab::{logic, ui, visuals};
 
 fn main() {
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
+
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
