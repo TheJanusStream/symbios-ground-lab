@@ -13,7 +13,9 @@
 //
 // UVs on the terrain mesh span [0, 1] across the full terrain, so:
 //   - The weight map is sampled at those UVs (one texel per heightmap cell).
-//   - The layer textures are sampled at `fract(uv * tile_scale)` to tile them.
+//   - The layer textures are sampled at `uv * tile_scale`; the Repeat address
+//     mode handles wrapping and preserves hardware derivatives for correct
+//     mipmap selection (fract() would destroy derivatives at tile boundaries).
 //
 // When `splat_uniforms.enabled == 0` the splat logic is bypassed and the base
 // StandardMaterial colour is passed through unchanged (useful for the disabled
@@ -96,9 +98,9 @@ fn triplanar_albedo(
     scale: f32,
     weights: vec3<f32>,
 ) -> vec4<f32> {
-    let col_x = textureSample(tex, samp, fract(world_pos.zy * scale), layer);
-    let col_y = textureSample(tex, samp, fract(world_pos.xz * scale), layer);
-    let col_z = textureSample(tex, samp, fract(world_pos.xy * scale), layer);
+    let col_x = textureSample(tex, samp, world_pos.zy * scale, layer);
+    let col_y = textureSample(tex, samp, world_pos.xz * scale, layer);
+    let col_z = textureSample(tex, samp, world_pos.xy * scale, layer);
     return col_x * weights.x + col_y * weights.y + col_z * weights.z;
 }
 
@@ -137,9 +139,9 @@ fn triplanar_normal_world(
     let sign_y = select(-1.0, 1.0, world_normal.y >= 0.0);
     let sign_z = select(-1.0, 1.0, world_normal.z >= 0.0);
 
-    let tn_x = decode_normal(textureSample(tex, samp, fract(world_pos.zy * scale), layer).rgb);
-    let tn_y = decode_normal(textureSample(tex, samp, fract(world_pos.xz * scale), layer).rgb);
-    let tn_z = decode_normal(textureSample(tex, samp, fract(world_pos.xy * scale), layer).rgb);
+    let tn_x = decode_normal(textureSample(tex, samp, world_pos.zy * scale, layer).rgb);
+    let tn_y = decode_normal(textureSample(tex, samp, world_pos.xz * scale, layer).rgb);
+    let tn_z = decode_normal(textureSample(tex, samp, world_pos.xy * scale, layer).rgb);
 
     // Reproject each tangent-space normal into world space via the per-face TBN.
     // Derivation: world = tx·T + ty·B + tz·N, with T/B chosen for right-handedness.
@@ -188,8 +190,8 @@ fn fragment(
         let safe_sum = select(raw_sum, 1.0, no_coverage);
         let weights = select(raw_weights / safe_sum, vec4<f32>(0.0, 0.0, 1.0, 0.0), no_coverage);
 
-        // Tiled UV wraps at each tile boundary (used by Grass, Dirt, Snow).
-        let tiled_uv = fract(in.uv * splat_uniforms.tile_scale);
+        // Tiled UV — sampler Repeat mode handles wrapping, preserving GPU derivatives.
+        let tiled_uv = in.uv * splat_uniforms.tile_scale;
 
         // Triplanar data for the Rock layer — computed once, shared by albedo
         // and normal sampling below.

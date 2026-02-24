@@ -19,6 +19,7 @@
 
 use bevy::{
     asset::RenderAssetUsages,
+    image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor},
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
@@ -188,31 +189,37 @@ pub fn collect_texture_results(
 // Texture array helpers
 // ---------------------------------------------------------------------------
 
-/// Reads the raw pixel data from four individual layer images and concatenates
-/// them into a single flat buffer suitable for a `texture_2d_array`.
+/// Reads the raw pixel data from four individual layer images and interleaves
+/// them into a single flat buffer in mip-major order for a `texture_2d_array`.
+///
+/// wgpu / Bevy requires 2D array textures with mipmaps to be laid out as:
+/// `[L0_mip0, L1_mip0, L2_mip0, L3_mip0, L0_mip1, L1_mip1, …]`
+/// **not** layer-major `[L0_mip0…mipN, L1_mip0…mipN, …]`.
 ///
 /// Returns `None` if any handle is missing, any image is absent from the
-/// asset store, or any image has no CPU-side data (e.g. because it was
-/// uploaded as `RENDER_WORLD`-only).
+/// asset store, or any image has no CPU-side data.
 ///
-/// The format and dimensions are inferred from the first layer and returned
-/// alongside the merged data so the caller can construct the array [`Image`].
+/// Returns `(data, format, width, height, mip_level_count)`.
 fn collect_layer_data(
     handles: &[Option<Handle<Image>>; 4],
     images: &Assets<Image>,
-) -> Option<(Vec<u8>, TextureFormat, u32, u32)> {
+) -> Option<(Vec<u8>, TextureFormat, u32, u32, u32)> {
     let first = images.get(handles[0].as_ref()?.id())?;
     let format = first.texture_descriptor.format;
     let w = first.texture_descriptor.size.width;
     let h = first.texture_descriptor.size.height;
-    let bytes_per_layer = first.data.as_ref()?.len();
+    let mip_level_count = first.texture_descriptor.mip_level_count;
 
+    // FIX: Bevy expects Layer-Major layout for Array Textures: [Layer0_AllMips, Layer1_AllMips, ...]
+    let bytes_per_layer = first.data.as_ref()?.len();
     let mut merged = Vec::with_capacity(bytes_per_layer * 4);
+
     for h_opt in handles {
         let img = images.get(h_opt.as_ref()?.id())?;
         merged.extend_from_slice(img.data.as_ref()?);
     }
-    Some((merged, format, w, h))
+
+    Some((merged, format, w, h, mip_level_count))
 }
 
 // ---------------------------------------------------------------------------
@@ -272,13 +279,13 @@ pub fn apply_splat_material(
     //
     // The immutable borrows of `images` (via `collect_layer_data`) are released
     // before the mutable `images.add` / `images.remove` calls below.
-    let Some((albedo_data, albedo_format, tex_w, tex_h)) =
+    let Some((albedo_data, albedo_format, tex_w, tex_h, mip_level_count)) =
         collect_layer_data(&mat_state.layer_albedo, &images)
     else {
         // Layer images not yet available in the asset store — retry next frame.
         return;
     };
-    let Some((normal_data, normal_format, _, _)) =
+    let Some((normal_data, normal_format, _, _, _)) =
         collect_layer_data(&mat_state.layer_normal, &images)
     else {
         return;
@@ -298,20 +305,37 @@ pub fn apply_splat_material(
         depth_or_array_layers: 4,
     };
 
-    let albedo_array = images.add(Image::new(
+    let array_sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        mag_filter: ImageFilterMode::Linear,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
+        anisotropy_clamp: 16,
+        ..Default::default()
+    });
+
+    let mut albedo_img = Image::new(
         array_extent,
         TextureDimension::D2,
         albedo_data,
         albedo_format,
         RenderAssetUsages::RENDER_WORLD,
-    ));
-    let normal_array = images.add(Image::new(
+    );
+    albedo_img.texture_descriptor.mip_level_count = mip_level_count;
+    albedo_img.sampler = array_sampler.clone();
+    let albedo_array = images.add(albedo_img);
+
+    let mut normal_img = Image::new(
         array_extent,
         TextureDimension::D2,
         normal_data,
         normal_format,
         RenderAssetUsages::RENDER_WORLD,
-    ));
+    );
+    normal_img.texture_descriptor.mip_level_count = mip_level_count;
+    normal_img.sampler = array_sampler;
+    let normal_array = images.add(normal_img);
 
     mat_state.albedo_array = Some(albedo_array.clone());
     mat_state.normal_array = Some(normal_array.clone());

@@ -41,7 +41,11 @@ pub fn spawn_terrain(
     // Four identical white/flat-normal pixels — one per splat layer — satisfy the
     // layer-count requirement without wasting memory.
     let albedo_placeholder = images.add(Image::new(
-        Extent3d { width: 1, height: 1, depth_or_array_layers: 4 },
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 4,
+        },
         TextureDimension::D2,
         vec![255u8; 4 * 4], // 4 layers × (R G B A)
         TextureFormat::Rgba8UnormSrgb,
@@ -50,7 +54,11 @@ pub fn spawn_terrain(
     // Flat normal: (128, 128, 255, 255) = (0, 0, 1) in tangent space.
     let flat_normal_pixel: Vec<u8> = vec![128, 128, 255, 255];
     let normal_placeholder = images.add(Image::new(
-        Extent3d { width: 1, height: 1, depth_or_array_layers: 4 },
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 4,
+        },
         TextureDimension::D2,
         flat_normal_pixel.repeat(4), // 4 layers
         TextureFormat::Rgba8Unorm,
