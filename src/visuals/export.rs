@@ -58,7 +58,7 @@ pub fn save_file_binary(filename: &str, bytes: &[u8]) -> Result<(), String> {
     arr.copy_from(bytes);
     let parts = js_sys::Array::new();
     parts.push(&arr);
-    let mut opts = web_sys::BlobPropertyBag::new();
+    let opts = web_sys::BlobPropertyBag::new();
     opts.set_type("application/octet-stream");
     let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &opts)
         .map_err(|e| format!("blob: {e:?}"))?;

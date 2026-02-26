@@ -4,6 +4,8 @@
 //! all [`MaterialConfig`] parameters: enable toggle, texture size, tile
 //! scale, per-layer splat rules, and per-layer texture generator configs.
 //!
+//! Texture-specific parameter editors are provided by [`bevy_symbios_texture::ui`].
+//!
 //! # Change-detection design
 //!
 //! `MaterialConfig` is accessed via [`DetectChanges::bypass_change_detection`]
@@ -14,8 +16,7 @@
 
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
-use bevy_symbios_texture::ground::GroundConfig;
-use bevy_symbios_texture::rock::RockConfig;
+use bevy_symbios_texture::ui::{f32_slider, ground_config_editor, rock_config_editor};
 
 use crate::core::material_config::{
     MaterialConfig, MaterialState, MaterialStatus, SplatRuleParams,
@@ -127,11 +128,12 @@ pub fn render_material_ui(
                                 .show(ui, |ui| {
                                     let rule_ch = show_splat_rule(ui, &mut cfg.rules[i]);
                                     ui.separator();
-                                    let tex_ch = match i {
-                                        0 => show_ground_config(ui, &mut cfg.grass),
-                                        1 => show_ground_config(ui, &mut cfg.dirt),
-                                        2 => show_rock_config(ui, &mut cfg.rock),
-                                        3 => show_ground_config(ui, &mut cfg.snow),
+                                    let tex_id = egui::Id::new(("layer_tex", i));
+                                    let (_, tex_ch) = match i {
+                                        0 => ground_config_editor(ui, &mut cfg.grass, tex_id),
+                                        1 => ground_config_editor(ui, &mut cfg.dirt, tex_id),
+                                        2 => rock_config_editor(ui, &mut cfg.rock, tex_id),
+                                        3 => ground_config_editor(ui, &mut cfg.snow, tex_id),
                                         _ => unreachable!(),
                                     };
                                     (rule_ch, tex_ch)
@@ -185,7 +187,7 @@ pub fn render_material_ui(
 }
 
 // ---------------------------------------------------------------------------
-// Sub-panels — all return `true` when the user edited something.
+// Sub-panels specific to symbios-ground-lab
 // ---------------------------------------------------------------------------
 
 fn show_splat_rule(ui: &mut egui::Ui, rule: &mut SplatRuleParams) -> bool {
@@ -194,10 +196,6 @@ fn show_splat_rule(ui: &mut egui::Ui, rule: &mut SplatRuleParams) -> bool {
 
     ui.horizontal(|ui| {
         ui.label("Height");
-        // Link ranges so min cannot exceed max in the UI.  Use local copies of
-        // the current bounds to avoid simultaneous mutable + shared borrows of
-        // the same struct (even though Rust allows field-disjoint borrows,
-        // passing both to a single call site is cleaner with copies).
         let h_max = rule.height_max;
         ch |= ui
             .add(
@@ -238,103 +236,4 @@ fn show_splat_rule(ui: &mut egui::Ui, rule: &mut SplatRuleParams) -> bool {
 
     ch |= f32_slider(ui, &mut rule.sharpness, "Sharpness", 0.5..=10.0);
     ch
-}
-
-fn show_ground_config(ui: &mut egui::Ui, c: &mut GroundConfig) -> bool {
-    ui.label(egui::RichText::new("Texture (Ground)").strong());
-    let mut ch = false;
-
-    ch |= u32_drag(ui, &mut c.seed, "Seed");
-    ch |= f64_slider(ui, &mut c.macro_scale, "Macro scale", 0.5..=8.0);
-    ch |= usize_slider(ui, &mut c.macro_octaves, "Macro octaves", 1..=8);
-    ch |= f64_slider(ui, &mut c.micro_scale, "Micro scale", 2.0..=20.0);
-    ch |= usize_slider(ui, &mut c.micro_octaves, "Micro octaves", 1..=6);
-    ch |= f64_slider(ui, &mut c.micro_weight, "Micro weight", 0.0..=1.0);
-
-    ui.horizontal(|ui| {
-        ui.label("Color dry");
-        ch |= ui.color_edit_button_rgb(&mut c.color_dry).changed();
-    });
-
-    ui.horizontal(|ui| {
-        ui.label("Color moist");
-        ch |= ui.color_edit_button_rgb(&mut c.color_moist).changed();
-    });
-
-    ch |= f32_slider(ui, &mut c.normal_strength, "Normal strength", 0.0..=8.0);
-    ch
-}
-
-fn show_rock_config(ui: &mut egui::Ui, c: &mut RockConfig) -> bool {
-    ui.label(egui::RichText::new("Texture (Rock)").strong());
-    let mut ch = false;
-
-    ch |= u32_drag(ui, &mut c.seed, "Seed");
-    ch |= f64_slider(ui, &mut c.scale, "Scale", 0.5..=12.0);
-    ch |= usize_slider(ui, &mut c.octaves, "Octaves", 1..=12);
-    ch |= f64_slider(ui, &mut c.attenuation, "Attenuation", 0.5..=6.0);
-
-    ui.horizontal(|ui| {
-        ui.label("Color gaps");
-        ch |= ui.color_edit_button_rgb(&mut c.color_light).changed();
-    });
-
-    ui.horizontal(|ui| {
-        ui.label("Color stone");
-        ch |= ui.color_edit_button_rgb(&mut c.color_dark).changed();
-    });
-
-    ch |= f32_slider(ui, &mut c.normal_strength, "Normal strength", 0.0..=8.0);
-    ch
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn f32_slider(
-    ui: &mut egui::Ui,
-    val: &mut f32,
-    label: &str,
-    range: std::ops::RangeInclusive<f32>,
-) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::Slider::new(val, range)).changed()
-    })
-    .inner
-}
-
-fn f64_slider(
-    ui: &mut egui::Ui,
-    val: &mut f64,
-    label: &str,
-    range: std::ops::RangeInclusive<f64>,
-) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::Slider::new(val, range)).changed()
-    })
-    .inner
-}
-
-fn usize_slider(
-    ui: &mut egui::Ui,
-    val: &mut usize,
-    label: &str,
-    range: std::ops::RangeInclusive<usize>,
-) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::Slider::new(val, range)).changed()
-    })
-    .inner
-}
-
-fn u32_drag(ui: &mut egui::Ui, val: &mut u32, label: &str) -> bool {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::DragValue::new(val).speed(1.0)).changed()
-    })
-    .inner
 }
