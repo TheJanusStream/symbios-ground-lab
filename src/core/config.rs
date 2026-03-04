@@ -131,7 +131,7 @@ pub struct CurrentHeightMap(pub Option<HeightMap>);
 
 /// Async generation task in-flight.
 #[derive(Resource, Default)]
-pub struct GenerationTask(pub Option<Task<HeightMap>>);
+pub struct GenerationTask(pub Option<Task<(HeightMap, Option<symbios_tensor::RoadGraph>)>>);
 
 /// Signals that the terrain mesh needs to be rebuilt from `CurrentHeightMap`.
 #[derive(Resource, Default)]

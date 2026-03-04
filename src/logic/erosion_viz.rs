@@ -10,20 +10,25 @@ use rand_pcg::Pcg64Mcg;
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, TerrainConfig, VizDroplet,
 };
-use crate::logic::generation::generate_heightmap;
+use crate::core::urban_config::UrbanConfig;
+use crate::logic::generation::generate_base_heightmap;
 
 /// Kick off the erosion visualisation.
 ///
 /// Generates the base (uneroded) heightmap on the `AsyncComputeTaskPool` so
 /// the main thread (and therefore the UI and camera) never block.  The viz is
 /// not `enabled` yet — `poll_viz_init` sets that once the task completes.
-pub fn start_erosion_viz(config: &TerrainConfig, state: &mut ErosionVizState) {
+pub fn start_erosion_viz(config: &TerrainConfig, u_cfg: &UrbanConfig, state: &mut ErosionVizState) {
     let mut cfg_no_erosion = config.clone();
     cfg_no_erosion.erosion_enabled = false;
     cfg_no_erosion.thermal_enabled = false;
 
+    let u_cfg = u_cfg.clone();
     let pool = AsyncComputeTaskPool::get();
-    let t = pool.spawn(async move { generate_heightmap(&cfg_no_erosion) });
+    let t = pool.spawn(async move {
+        let (hm, _rg) = generate_base_heightmap(&cfg_no_erosion, &u_cfg);
+        hm
+    });
     state.init_task = Some(t);
 
     // Pre-populate everything except the heightmap so the step system is ready

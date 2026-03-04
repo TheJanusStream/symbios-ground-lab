@@ -6,6 +6,7 @@ use crate::core::config::{
     GenerationTask, GeneratorKind, TerrainConfig, TerrainDebounce,
 };
 use crate::core::material_config::MaterialConfig;
+use crate::core::urban_config::UrbanConfig;
 use crate::logic::erosion_viz::start_erosion_viz;
 use crate::visuals::export::{spawn_json_export, spawn_obj_export, spawn_png_export};
 
@@ -33,6 +34,7 @@ pub fn render_ui(
     mut dirty_mesh: ResMut<DirtyMesh>,
     time: Res<Time>,
     mat_config: Res<MaterialConfig>,
+    urban_config: Res<UrbanConfig>,
 ) {
     // Tick debounce
     if debounce.pending {
@@ -321,7 +323,7 @@ pub fn render_ui(
                     // generation mid-visualization and overwrite the mesh.
                     debounce.pending = false;
                     let cfg = config.clone();
-                    start_erosion_viz(&cfg, &mut viz);
+                    start_erosion_viz(&cfg, &urban_config, &mut viz);
                 }
 
                 if (viz_active || viz_initializing) && ui.button("Stop Viz").clicked() {

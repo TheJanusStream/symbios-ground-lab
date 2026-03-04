@@ -8,6 +8,7 @@ bevy = "0.18"
 bevy_egui = "0.39"
 bevy_panorbit_camera = { version = "0.34", features = ["bevy_egui"] }
 symbios-ground = "0.1"
+symbios-tensor = { path = "../symbios-tensor" }
 bevy_symbios_ground = "0.1"
 bevy_symbios_texture = { path = "../bevy_symbios_texture", features = ["egui"] }
 rand = "0.9"
@@ -39,9 +40,9 @@ web-sys = { version = "0.3.82", features = [
 wasm-bindgen = "0.2.108"
 js-sys = "0.3.82"
 
-[profile.release]
-opt-level = "s"   # Optimize for size (helps wasm-bindgen)
-lto = "fat"       # Enable full Link Time Optimization (CRITICAL FIX)
-codegen-units = 1 # Reduce parallelism to improve optimization quality
-strip = true      # Strip symbols to clean up the binary tables
-panic = "abort"   # Reduce binary size by removing stack unwinding
+# [profile.release]
+# opt-level = "s"   # Optimize for size (helps wasm-bindgen)
+# lto = "fat"       # Enable full Link Time Optimization (CRITICAL FIX)
+# codegen-units = 1 # Reduce parallelism to improve optimization quality
+# strip = true      # Strip symbols to clean up the binary tables
+# panic = "abort"   # Reduce binary size by removing stack unwinding

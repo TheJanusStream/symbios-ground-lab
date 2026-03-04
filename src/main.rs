@@ -8,6 +8,7 @@ use symbios_ground_lab::core::config::{
     GenerationTask, TerrainConfig, TerrainDebounce,
 };
 use symbios_ground_lab::core::material_config::{MaterialConfig, MaterialState};
+use symbios_ground_lab::core::urban_config::{CurrentRoadGraph, UrbanConfig};
 use symbios_ground_lab::visuals::splat_material::SplatTerrainMaterial;
 use symbios_ground_lab::{logic, ui, visuals};
 
@@ -41,6 +42,8 @@ fn main() {
         .init_resource::<ErosionVizState>()
         .init_resource::<MaterialConfig>()
         .init_resource::<MaterialState>()
+        .init_resource::<UrbanConfig>()
+        .init_resource::<CurrentRoadGraph>()
         // ── Startup ───────────────────────────────────────────────────────
         .add_systems(
             Startup,
@@ -49,7 +52,11 @@ fn main() {
         // ── UI (egui pass) ────────────────────────────────────────────────
         .add_systems(
             EguiPrimaryContextPass,
-            (ui::panel::render_ui, ui::material_panel::render_material_ui),
+            (
+                ui::panel::render_ui,
+                ui::material_panel::render_material_ui,
+                ui::urban_panel::render_urban_ui,
+            ),
         )
         // ── Update ────────────────────────────────────────────────────────
         .add_systems(
@@ -61,6 +68,7 @@ fn main() {
                 logic::erosion_viz::step_erosion_viz,
                 visuals::terrain::rebuild_terrain,
                 visuals::droplets::draw_droplet_gizmos,
+                visuals::urban_gizmos::draw_road_gizmos,
                 visuals::export::poll_export_task,
                 // Material pipeline runs after terrain so the heightmap is fresh.
                 visuals::material::detect_material_dirty,

@@ -5,14 +5,15 @@ use symbios_ground::HeightMap;
 use symbios_ground::{
     DiamondSquare, FbmNoise, HydraulicErosion, TerrainGenerator, ThermalErosion, VoronoiTerracing,
 };
-
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, GeneratorKind, TerrainConfig,
 };
+use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
 
 /// Spawns an async task to generate the terrain when `DirtyFlags::terrain` is set.
 pub fn start_generation(
     config: Res<TerrainConfig>,
+    urban_config: Res<UrbanConfig>,
     mut dirty: ResMut<DirtyFlags>,
     mut task: ResMut<GenerationTask>,
 ) {
@@ -22,8 +23,9 @@ pub fn start_generation(
     dirty.terrain = false;
 
     let cfg = config.clone();
+    let u_cfg = urban_config.clone();
     let pool = AsyncComputeTaskPool::get();
-    let t = pool.spawn(async move { generate_heightmap(&cfg) });
+    let t = pool.spawn(async move { generate_heightmap_and_roads(&cfg, &u_cfg) });
     task.0 = Some(t);
 }
 
@@ -31,11 +33,13 @@ pub fn start_generation(
 pub fn poll_generation(
     mut task: ResMut<GenerationTask>,
     mut current_hm: ResMut<CurrentHeightMap>,
+    mut current_rg: ResMut<CurrentRoadGraph>,
     mut dirty_mesh: ResMut<DirtyMesh>,
 ) {
     let Some(ref mut t) = task.0 else { return };
-    if let Some(hm) = future::block_on(future::poll_once(t)) {
+    if let Some((hm, rg)) = future::block_on(future::poll_once(t)) {
         current_hm.0 = Some(hm);
+        current_rg.0 = rg;
         dirty_mesh.0 = true;
         task.0 = None;
     }
@@ -45,44 +49,15 @@ pub fn poll_generation(
 // Pure terrain generation (runs on a thread pool worker)
 // ---------------------------------------------------------------------------
 
-pub fn generate_heightmap(cfg: &TerrainConfig) -> HeightMap {
-    let size = (cfg.grid_size as usize).max(2);
-    let mut hm = HeightMap::new(size, size, cfg.cell_scale);
+/// Generates a heightmap and optionally a road graph, then carves roads into
+/// the terrain before erosion passes run.
+pub fn generate_heightmap_and_roads(
+    cfg: &TerrainConfig,
+    u_cfg: &UrbanConfig,
+) -> (HeightMap, Option<symbios_tensor::RoadGraph>) {
+    let (mut hm, road_graph) = generate_heightmap_inner(cfg, u_cfg);
 
-    // Base terrain generation — dispatched by algorithm choice
-    match cfg.generator_kind {
-        GeneratorKind::FbmNoise => {
-            FbmNoise {
-                seed: cfg.seed,
-                octaves: cfg.octaves,
-                persistence: cfg.persistence,
-                lacunarity: cfg.lacunarity,
-                base_frequency: cfg.base_frequency,
-            }
-            .generate(&mut hm);
-            hm.normalize();
-        }
-        GeneratorKind::DiamondSquare => {
-            // DiamondSquare resizes the grid to 2^n+1 and normalises internally.
-            DiamondSquare::new(cfg.seed, cfg.ds_roughness).generate(&mut hm);
-        }
-        GeneratorKind::VoronoiTerracing => {
-            // VoronoiTerracing outputs heights already in [0, 1).
-            VoronoiTerracing::new(
-                cfg.seed,
-                cfg.voronoi_num_seeds.max(1) as usize,
-                cfg.voronoi_num_terraces.max(1) as usize,
-            )
-            .generate(&mut hm);
-        }
-    }
-
-    // Scale to desired height (common to all generators)
-    for v in hm.data_mut() {
-        *v *= cfg.height_scale;
-    }
-
-    // Hydraulic erosion
+    // Hydraulic erosion (acts on carved terrain when roads are enabled)
     if cfg.erosion_enabled {
         let erosion = HydraulicErosion {
             seed: cfg.seed,
@@ -105,5 +80,56 @@ pub fn generate_heightmap(cfg: &TerrainConfig) -> HeightMap {
             .erode(&mut hm);
     }
 
-    hm
+    (hm, road_graph)
+}
+
+/// Generates the base heightmap (pre-erosion). Used by erosion viz as well.
+pub fn generate_base_heightmap(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> (HeightMap, Option<symbios_tensor::RoadGraph>) {
+    generate_heightmap_inner(cfg, u_cfg)
+}
+
+fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> (HeightMap, Option<symbios_tensor::RoadGraph>) {
+    let size = (cfg.grid_size as usize).max(2);
+    let mut hm = HeightMap::new(size, size, cfg.cell_scale);
+
+    // Base terrain generation — dispatched by algorithm choice
+    match cfg.generator_kind {
+        GeneratorKind::FbmNoise => {
+            FbmNoise {
+                seed: cfg.seed,
+                octaves: cfg.octaves,
+                persistence: cfg.persistence,
+                lacunarity: cfg.lacunarity,
+                base_frequency: cfg.base_frequency,
+            }
+            .generate(&mut hm);
+            hm.normalize();
+        }
+        GeneratorKind::DiamondSquare => {
+            DiamondSquare::new(cfg.seed, cfg.ds_roughness).generate(&mut hm);
+        }
+        GeneratorKind::VoronoiTerracing => {
+            VoronoiTerracing::new(
+                cfg.seed,
+                cfg.voronoi_num_seeds.max(1) as usize,
+                cfg.voronoi_num_terraces.max(1) as usize,
+            )
+            .generate(&mut hm);
+        }
+    }
+
+    // Scale to desired height (common to all generators)
+    for v in hm.data_mut() {
+        *v *= cfg.height_scale;
+    }
+
+    // Urban road generation & carving (before erosion)
+    let mut road_graph = None;
+    if u_cfg.enabled {
+        let graph = symbios_tensor::generate_roads(&hm, &u_cfg.tensor);
+        symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width);
+        road_graph = Some(graph);
+    }
+
+    (hm, road_graph)
 }
