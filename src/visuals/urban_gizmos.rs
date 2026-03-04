@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::core::config::CurrentHeightMap;
-use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
+use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 use symbios_tensor::{RoadType, block_centroid};
 
 /// Draw road graph edges as colored gizmo lines above the terrain surface.
@@ -94,6 +94,58 @@ pub fn draw_block_gizmos(
             let cy = hm.get_height_at(c.x, c.y) + 0.8;
             let center = Vec3::new(c.x - half_w, cy, c.y - half_d);
             gizmos.sphere(Isometry3d::from_translation(center), 0.5, centroid_color);
+        }
+    }
+}
+
+/// Draw building lot footprints as oriented rectangles above the terrain.
+pub fn draw_lot_gizmos(
+    config: Res<UrbanConfig>,
+    current_hm: Res<CurrentHeightMap>,
+    current_lots: Res<CurrentBuildingLots>,
+    mut gizmos: Gizmos,
+) {
+    if !config.enabled || !config.show_lot_gizmos {
+        return;
+    }
+    let Some(hm) = &current_hm.0 else { return };
+    if current_lots.0.is_empty() {
+        return;
+    }
+
+    let half_w = hm.world_width() * 0.5;
+    let half_d = hm.world_depth() * 0.5;
+    let color = Color::srgb(1.0, 0.6, 0.2);
+
+    for lot in &current_lots.0 {
+        let y = hm.get_height_at(lot.position.x, lot.position.y) + 0.7;
+        let center = Vec3::new(lot.position.x - half_w, y, lot.position.y - half_d);
+
+        // Build the four corners of the oriented rectangle
+        let cos = lot.rotation.cos();
+        let sin = lot.rotation.sin();
+        let hw = lot.width * 0.5;
+        let hd = lot.depth * 0.5;
+
+        // Local offsets (street_dir = cos/sin, inward_dir = -sin/cos)
+        let corners = [
+            (-hw, -hd),
+            (hw, -hd),
+            (hw, hd),
+            (-hw, hd),
+        ];
+
+        let world_corners: Vec<Vec3> = corners
+            .iter()
+            .map(|&(lx, ly)| {
+                let wx = lx * cos - ly * sin;
+                let wz = lx * sin + ly * cos;
+                Vec3::new(center.x + wx, center.y, center.z + wz)
+            })
+            .collect();
+
+        for i in 0..4 {
+            gizmos.line(world_corners[i], world_corners[(i + 1) % 4], color);
         }
     }
 }

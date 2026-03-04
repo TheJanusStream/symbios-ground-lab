@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
 use crate::core::config::{DirtyFlags, TerrainDebounce};
-use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
+use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 
 /// Render the "Urban Planner" egui window.
 pub fn render_urban_ui(
@@ -11,6 +11,7 @@ pub fn render_urban_ui(
     mut dirty: ResMut<DirtyFlags>,
     mut debounce: ResMut<TerrainDebounce>,
     current_rg: Res<CurrentRoadGraph>,
+    current_lots: Res<CurrentBuildingLots>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else { return };
 
@@ -59,9 +60,9 @@ pub fn render_urban_ui(
                             slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
                     });
 
-                // ── Building Lots ────────────────────────────────────
+                // ── Blocks ──────────────────────────────────────────
                 ui.separator();
-                egui::CollapsingHeader::new("Building Lots")
+                egui::CollapsingHeader::new("Blocks")
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.checkbox(&mut config.show_block_gizmos, "Show Block Outlines");
@@ -72,6 +73,47 @@ pub fn render_urban_ui(
                             .as_ref()
                             .map_or(0, |g| g.blocks.len());
                         ui.label(format!("Blocks: {block_count}"));
+                    });
+
+                // ── Building Lots ────────────────────────────────────
+                ui.separator();
+                egui::CollapsingHeader::new("Building Lots")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.checkbox(&mut config.show_lot_gizmos, "Show Lot Footprints");
+
+                        changed |= slider(
+                            ui,
+                            &mut config.lot.max_lot_area,
+                            "Max Lot Area",
+                            100.0..=2000.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.lot.min_lot_area,
+                            "Min Lot Area",
+                            10.0..=200.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.lot.front_setback,
+                            "Front Setback",
+                            0.0..=10.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.lot.side_setback,
+                            "Side Setback",
+                            0.0..=5.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.lot.rear_setback,
+                            "Rear Setback",
+                            0.0..=10.0,
+                        );
+
+                        ui.label(format!("Lots: {}", current_lots.0.len()));
                     });
             });
 

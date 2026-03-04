@@ -8,7 +8,7 @@ use symbios_ground::{
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, GeneratorKind, TerrainConfig,
 };
-use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
+use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 
 /// Spawns an async task to generate the terrain when `DirtyFlags::terrain` is set.
 pub fn start_generation(
@@ -25,7 +25,7 @@ pub fn start_generation(
     let cfg = config.clone();
     let u_cfg = urban_config.clone();
     let pool = AsyncComputeTaskPool::get();
-    let t = pool.spawn(async move { generate_heightmap_and_roads(&cfg, &u_cfg) });
+    let t = pool.spawn(async move { generate_terrain(&cfg, &u_cfg) });
     task.0 = Some(t);
 }
 
@@ -34,12 +34,14 @@ pub fn poll_generation(
     mut task: ResMut<GenerationTask>,
     mut current_hm: ResMut<CurrentHeightMap>,
     mut current_rg: ResMut<CurrentRoadGraph>,
+    mut current_lots: ResMut<CurrentBuildingLots>,
     mut dirty_mesh: ResMut<DirtyMesh>,
 ) {
     let Some(ref mut t) = task.0 else { return };
-    if let Some((hm, rg)) = future::block_on(future::poll_once(t)) {
+    if let Some((hm, rg, lots)) = future::block_on(future::poll_once(t)) {
         current_hm.0 = Some(hm);
         current_rg.0 = rg;
+        current_lots.0 = lots;
         dirty_mesh.0 = true;
         task.0 = None;
     }
@@ -49,13 +51,15 @@ pub fn poll_generation(
 // Pure terrain generation (runs on a thread pool worker)
 // ---------------------------------------------------------------------------
 
-/// Generates a heightmap and optionally a road graph, then carves roads into
-/// the terrain before erosion passes run.
-pub fn generate_heightmap_and_roads(
+type GenerationResult = (HeightMap, Option<symbios_tensor::RoadGraph>, Vec<symbios_tensor::BuildingLot>);
+
+/// Generates a heightmap, optionally a road graph and building lots, then
+/// carves roads into the terrain before erosion passes run.
+pub fn generate_terrain(
     cfg: &TerrainConfig,
     u_cfg: &UrbanConfig,
-) -> (HeightMap, Option<symbios_tensor::RoadGraph>) {
-    let (mut hm, road_graph) = generate_heightmap_inner(cfg, u_cfg);
+) -> GenerationResult {
+    let (mut hm, road_graph, lots) = generate_heightmap_inner(cfg, u_cfg);
 
     // Hydraulic erosion (acts on carved terrain when roads are enabled)
     if cfg.erosion_enabled {
@@ -80,15 +84,15 @@ pub fn generate_heightmap_and_roads(
             .erode(&mut hm);
     }
 
-    (hm, road_graph)
+    (hm, road_graph, lots)
 }
 
 /// Generates the base heightmap (pre-erosion). Used by erosion viz as well.
-pub fn generate_base_heightmap(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> (HeightMap, Option<symbios_tensor::RoadGraph>) {
+pub fn generate_base_heightmap(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> GenerationResult {
     generate_heightmap_inner(cfg, u_cfg)
 }
 
-fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> (HeightMap, Option<symbios_tensor::RoadGraph>) {
+fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> GenerationResult {
     let size = (cfg.grid_size as usize).max(2);
     let mut hm = HeightMap::new(size, size, cfg.cell_scale);
 
@@ -125,12 +129,14 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> (Height
 
     // Urban road generation & carving (before erosion)
     let mut road_graph = None;
+    let mut lots = Vec::new();
     if u_cfg.enabled {
         let mut graph = symbios_tensor::generate_roads(&hm, &u_cfg.tensor);
         symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width);
         symbios_tensor::extract_blocks(&mut graph);
+        lots = symbios_tensor::extract_lots(&graph, &u_cfg.lot);
         road_graph = Some(graph);
     }
 
-    (hm, road_graph)
+    (hm, road_graph, lots)
 }

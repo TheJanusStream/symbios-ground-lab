@@ -6,6 +6,9 @@ use rand_pcg::Pcg64Mcg;
 use serde::{Deserialize, Serialize};
 use symbios_ground::HeightMap;
 
+/// Result tuple from the async terrain generation task.
+pub type GenerationOutput = (HeightMap, Option<symbios_tensor::RoadGraph>, Vec<symbios_tensor::BuildingLot>);
+
 /// Which base terrain generation algorithm to use.
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum GeneratorKind {
@@ -131,7 +134,7 @@ pub struct CurrentHeightMap(pub Option<HeightMap>);
 
 /// Async generation task in-flight.
 #[derive(Resource, Default)]
-pub struct GenerationTask(pub Option<Task<(HeightMap, Option<symbios_tensor::RoadGraph>)>>);
+pub struct GenerationTask(pub Option<Task<GenerationOutput>>);
 
 /// Signals that the terrain mesh needs to be rebuilt from `CurrentHeightMap`.
 #[derive(Resource, Default)]

@@ -26,7 +26,7 @@ pub fn start_erosion_viz(config: &TerrainConfig, u_cfg: &UrbanConfig, state: &mu
     let u_cfg = u_cfg.clone();
     let pool = AsyncComputeTaskPool::get();
     let t = pool.spawn(async move {
-        let (hm, _rg) = generate_base_heightmap(&cfg_no_erosion, &u_cfg);
+        let (hm, _rg, _lots) = generate_base_heightmap(&cfg_no_erosion, &u_cfg);
         hm
     });
     state.init_task = Some(t);
