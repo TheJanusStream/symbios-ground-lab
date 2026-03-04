@@ -126,8 +126,9 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> (Height
     // Urban road generation & carving (before erosion)
     let mut road_graph = None;
     if u_cfg.enabled {
-        let graph = symbios_tensor::generate_roads(&hm, &u_cfg.tensor);
+        let mut graph = symbios_tensor::generate_roads(&hm, &u_cfg.tensor);
         symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width);
+        symbios_tensor::extract_blocks(&mut graph);
         road_graph = Some(graph);
     }
 

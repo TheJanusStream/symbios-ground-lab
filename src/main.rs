@@ -69,6 +69,7 @@ fn main() {
                 visuals::terrain::rebuild_terrain,
                 visuals::droplets::draw_droplet_gizmos,
                 visuals::urban_gizmos::draw_road_gizmos,
+                visuals::urban_gizmos::draw_block_gizmos,
                 visuals::export::poll_export_task,
                 // Material pipeline runs after terrain so the heightmap is fresh.
                 visuals::material::detect_material_dirty,

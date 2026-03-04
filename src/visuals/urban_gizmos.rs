@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::core::config::CurrentHeightMap;
 use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
-use symbios_tensor::RoadType;
+use symbios_tensor::{RoadType, block_centroid};
 
 /// Draw road graph edges as colored gizmo lines above the terrain surface.
 pub fn draw_road_gizmos(
@@ -42,5 +42,58 @@ pub fn draw_road_gizmos(
         };
 
         gizmos.line(v1, v2, color);
+    }
+}
+
+/// Draw city block perimeters and centroids as colored gizmo overlays.
+pub fn draw_block_gizmos(
+    config: Res<UrbanConfig>,
+    current_hm: Res<CurrentHeightMap>,
+    current_rg: Res<CurrentRoadGraph>,
+    mut gizmos: Gizmos,
+) {
+    if !config.enabled {
+        return;
+    }
+    let show_outlines = config.show_block_gizmos;
+    let show_centroids = config.show_block_centroids;
+    if !show_outlines && !show_centroids {
+        return;
+    }
+    let Some(hm) = &current_hm.0 else { return };
+    let Some(graph) = &current_rg.0 else { return };
+
+    let half_w = hm.world_width() * 0.5;
+    let half_d = hm.world_depth() * 0.5;
+    let outline_color = Color::srgb(0.2, 1.0, 0.4);
+    let centroid_color = Color::srgb(1.0, 0.3, 0.8);
+
+    for block in &graph.blocks {
+        let perimeter = &block.perimeter;
+        if perimeter.len() < 3 {
+            continue;
+        }
+
+        if show_outlines {
+            for i in 0..perimeter.len() {
+                let p1 = graph.nodes[perimeter[i] as usize].position;
+                let p2 = graph.nodes[perimeter[(i + 1) % perimeter.len()] as usize].position;
+
+                let y1 = hm.get_height_at(p1.x, p1.y) + 0.6;
+                let y2 = hm.get_height_at(p2.x, p2.y) + 0.6;
+
+                let v1 = Vec3::new(p1.x - half_w, y1, p1.y - half_d);
+                let v2 = Vec3::new(p2.x - half_w, y2, p2.y - half_d);
+
+                gizmos.line(v1, v2, outline_color);
+            }
+        }
+
+        if show_centroids {
+            let c = block_centroid(block, graph);
+            let cy = hm.get_height_at(c.x, c.y) + 0.8;
+            let center = Vec3::new(c.x - half_w, cy, c.y - half_d);
+            gizmos.sphere(Isometry3d::from_translation(center), 0.5, centroid_color);
+        }
     }
 }

@@ -9,6 +9,8 @@ pub struct UrbanConfig {
     pub tensor: TensorConfig,
     pub road_width: f32,
     pub show_gizmos: bool,
+    pub show_block_gizmos: bool,
+    pub show_block_centroids: bool,
 }
 
 impl Default for UrbanConfig {
@@ -18,6 +20,8 @@ impl Default for UrbanConfig {
             tensor: TensorConfig::default(),
             road_width: 2.0,
             show_gizmos: true,
+            show_block_gizmos: true,
+            show_block_centroids: true,
         }
     }
 }

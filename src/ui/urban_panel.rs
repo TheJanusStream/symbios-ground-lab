@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
 use crate::core::config::{DirtyFlags, TerrainDebounce};
-use crate::core::urban_config::UrbanConfig;
+use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
 
 /// Render the "Urban Planner" egui window.
 pub fn render_urban_ui(
@@ -10,6 +10,7 @@ pub fn render_urban_ui(
     mut config: ResMut<UrbanConfig>,
     mut dirty: ResMut<DirtyFlags>,
     mut debounce: ResMut<TerrainDebounce>,
+    current_rg: Res<CurrentRoadGraph>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else { return };
 
@@ -22,34 +23,56 @@ pub fn render_urban_ui(
             changed |= ui
                 .checkbox(&mut config.enabled, "Enable Urban Generation")
                 .changed();
-            // Show gizmos toggle doesn't trigger regeneration
-            ui.checkbox(&mut config.show_gizmos, "Show Road Gizmos");
 
             ui.add_enabled_ui(config.enabled, |ui| {
+                // ── Roads ────────────────────────────────────────────
                 ui.separator();
+                egui::CollapsingHeader::new("Roads")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.checkbox(&mut config.show_gizmos, "Show Road Gizmos");
+                        changed |= slider(
+                            ui,
+                            &mut config.tensor.step_size,
+                            "Step Size",
+                            0.5..=5.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.tensor.major_road_dist,
+                            "Major Road Dist",
+                            10.0..=100.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.tensor.minor_road_dist,
+                            "Minor Road Dist",
+                            5.0..=50.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.tensor.snap_radius,
+                            "Snap Radius",
+                            1.0..=10.0,
+                        );
+                        changed |=
+                            slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
+                    });
 
-                changed |= slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=5.0);
-                changed |= slider(
-                    ui,
-                    &mut config.tensor.major_road_dist,
-                    "Major Road Dist",
-                    10.0..=100.0,
-                );
-                changed |= slider(
-                    ui,
-                    &mut config.tensor.minor_road_dist,
-                    "Minor Road Dist",
-                    5.0..=50.0,
-                );
-                changed |= slider(
-                    ui,
-                    &mut config.tensor.snap_radius,
-                    "Snap Radius",
-                    1.0..=10.0,
-                );
-
+                // ── Building Lots ────────────────────────────────────
                 ui.separator();
-                changed |= slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
+                egui::CollapsingHeader::new("Building Lots")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.checkbox(&mut config.show_block_gizmos, "Show Block Outlines");
+                        ui.checkbox(&mut config.show_block_centroids, "Show Block Centroids");
+
+                        let block_count = current_rg
+                            .0
+                            .as_ref()
+                            .map_or(0, |g| g.blocks.len());
+                        ui.label(format!("Blocks: {block_count}"));
+                    });
             });
 
             if changed {
