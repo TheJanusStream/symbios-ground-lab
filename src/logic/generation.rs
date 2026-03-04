@@ -135,6 +135,7 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
         symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width);
         symbios_tensor::extract_blocks(&mut graph);
         lots = symbios_tensor::extract_lots(&graph, &u_cfg.lot);
+        symbios_tensor::carve_lots(&lots, &mut hm, u_cfg.lot_blend_radius);
         road_graph = Some(graph);
     }
 

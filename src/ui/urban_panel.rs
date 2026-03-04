@@ -112,6 +112,12 @@ pub fn render_urban_ui(
                             "Rear Setback",
                             0.0..=10.0,
                         );
+                        changed |= slider(
+                            ui,
+                            &mut config.lot_blend_radius,
+                            "Blend Radius",
+                            0.0..=30.0,
+                        );
 
                         ui.label(format!("Lots: {}", current_lots.0.len()));
                     });
