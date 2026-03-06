@@ -5,12 +5,18 @@ use bevy::{
 };
 use bevy_symbios_ground::{HeightMapMeshBuilder, NormalMethod};
 
-use crate::core::config::{CurrentHeightMap, DirtyFlags, DirtyMesh};
 use crate::visuals::splat_material::{SplatExtension, SplatMaterialHandle, SplatTerrainMaterial};
+use crate::{
+    core::config::{CurrentHeightMap, DirtyFlags, DirtyMesh, TerrainConfig},
+    visuals::water_material::{WaterExtension, WaterMaterial},
+};
 
 /// Marker component for the primary terrain mesh entity.
 #[derive(Component)]
 pub struct TerrainMesh;
+
+#[derive(Component)]
+pub struct WaterVolume;
 
 /// Spawn a placeholder flat plane until the first generation completes.
 ///
@@ -23,8 +29,10 @@ pub fn spawn_terrain(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<SplatTerrainMaterial>>,
+    mut water_materials: ResMut<Assets<WaterMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut dirty_flags: ResMut<DirtyFlags>,
+    config: Res<TerrainConfig>,
 ) {
     let placeholder = meshes.add(
         Plane3d::default()
@@ -85,6 +93,32 @@ pub fn spawn_terrain(
     ));
     commands.insert_resource(SplatMaterialHandle(mat_handle));
 
+    let water_mat = water_materials.add(WaterMaterial {
+        base: StandardMaterial {
+            base_color: Color::srgba(0.0, 0.4, 0.6, 0.5),
+            perceptual_roughness: 0.05,
+            metallic: 0.1,
+            alpha_mode: AlphaMode::Blend,
+            cull_mode: None,
+            ..default()
+        },
+        extension: WaterExtension::default(),
+    });
+
+    let world_extent = (config.grid_size - 1) as f32 * config.cell_scale;
+    let wl = config.water_level * config.height_scale;
+
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+        MeshMaterial3d(water_mat),
+        Transform::from_xyz(0.0, wl / 2.0, 0.0).with_scale(Vec3::new(
+            world_extent,
+            wl,
+            world_extent,
+        )),
+        WaterVolume,
+    ));
+
     // Kick off the first generation immediately.
     dirty_flags.terrain = true;
 }
@@ -99,6 +133,8 @@ pub fn rebuild_terrain(
     current_hm: Res<CurrentHeightMap>,
     mut dirty_mesh: ResMut<DirtyMesh>,
     viz: Res<crate::core::config::ErosionVizState>,
+    mut water_q: Query<&mut Transform, (With<WaterVolume>, Without<TerrainMesh>)>,
+    config: Res<TerrainConfig>,
 ) {
     if !dirty_mesh.0 {
         return;
@@ -113,6 +149,15 @@ pub fn rebuild_terrain(
         .with_normal_method(NormalMethod::AreaWeighted)
         .with_uv_tile_size(world_extent)
         .build(hm);
+
+    // Water volume
+    if let Ok(mut transform) = water_q.single_mut() {
+        let wl = config.water_level * config.height_scale;
+        transform.translation.y = wl / 2.0;
+        transform.scale.y = wl;
+        transform.scale.x = (config.grid_size - 1) as f32 * config.cell_scale;
+        transform.scale.z = (config.grid_size - 1) as f32 * config.cell_scale;
+    }
 
     // Generate per-vertex tangents so the fragment shader can build the TBN
     // frame for tangent-space normal-map blending. Skip during active erosion

@@ -17,3 +17,4 @@ pub mod scene;
 pub mod splat_material;
 pub mod terrain;
 pub mod urban_gizmos;
+pub mod water_material;

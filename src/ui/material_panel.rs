@@ -50,7 +50,7 @@ pub fn render_material_ui(
 
         egui::Window::new("Materials")
             .default_width(340.0)
-            .anchor(egui::Align2::RIGHT_TOP, egui::Vec2::new(-10.0, 10.0))
+            .default_pos((350.0, 10.0))
             .show(ctx, |ui| {
                 // ── Enable ────────────────────────────────────────────────
                 // Toggling the enable switch requires a full rebuild of both

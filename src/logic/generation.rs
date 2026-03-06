@@ -61,6 +61,9 @@ pub fn generate_terrain(
 ) -> GenerationResult {
     let (mut hm, road_graph, lots) = generate_heightmap_inner(cfg, u_cfg);
 
+    // Calculate absolute water level based on the height scale
+    let absolute_water_level = cfg.water_level * cfg.height_scale;
+
     // Hydraulic erosion (acts on carved terrain when roads are enabled)
     if cfg.erosion_enabled {
         let erosion = HydraulicErosion {
@@ -71,6 +74,7 @@ pub fn generate_terrain(
             deposition_rate: cfg.deposition_rate,
             evaporation_rate: cfg.evaporation_rate,
             capacity_factor: cfg.capacity_factor,
+            water_level: absolute_water_level,
             ..HydraulicErosion::new(cfg.seed)
         };
         erosion.erode(&mut hm);
@@ -81,6 +85,8 @@ pub fn generate_terrain(
         ThermalErosion::new()
             .with_iterations(cfg.thermal_iterations)
             .with_talus_angle(cfg.thermal_talus_angle)
+            .with_water_level(absolute_water_level)
+            .with_underwater_talus_angle(0.01) 
             .erode(&mut hm);
     }
 

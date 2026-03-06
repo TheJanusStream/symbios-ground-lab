@@ -10,6 +10,7 @@ use symbios_ground_lab::core::config::{
 use symbios_ground_lab::core::material_config::{MaterialConfig, MaterialState};
 use symbios_ground_lab::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 use symbios_ground_lab::visuals::splat_material::SplatTerrainMaterial;
+use symbios_ground_lab::visuals::water_material::WaterMaterial;
 use symbios_ground_lab::{logic, ui, visuals};
 
 fn main() {
@@ -29,6 +30,7 @@ fn main() {
             PanOrbitCameraPlugin,
             SymbiosTexturePlugin,
             MaterialPlugin::<SplatTerrainMaterial>::default(),
+            MaterialPlugin::<WaterMaterial>::default(),
         ))
         // ── Resources ────────────────────────────────────────────────────
         .init_resource::<TerrainConfig>()

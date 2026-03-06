@@ -57,7 +57,7 @@ pub fn render_ui(
 
     egui::Window::new("Terraformer")
         .default_width(320.0)
-        .anchor(egui::Align2::LEFT_TOP, egui::Vec2::new(10.0, 10.0))
+        .default_pos((10.0, 10.0))
         .show(ctx, |ui| {
             // ── Grid / World ──────────────────────────────────────────────
             egui::CollapsingHeader::new("Grid / World")
@@ -92,7 +92,7 @@ pub fn render_ui(
                         changed |= slider(ui, &mut config.cell_scale, "Cell scale", 0.1..=4.0);
                         changed |=
                             slider(ui, &mut config.height_scale, "Height scale", 1.0..=200.0);
-
+                        changed |= slider(ui, &mut config.water_level, "Water level", 0.0..=1.0);
                         if changed {
                             trigger_debounce(&mut debounce, &mut dirty);
                         }

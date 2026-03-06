@@ -7,7 +7,11 @@ use serde::{Deserialize, Serialize};
 use symbios_ground::HeightMap;
 
 /// Result tuple from the async terrain generation task.
-pub type GenerationOutput = (HeightMap, Option<symbios_tensor::RoadGraph>, Vec<symbios_tensor::BuildingLot>);
+pub type GenerationOutput = (
+    HeightMap,
+    Option<symbios_tensor::RoadGraph>,
+    Vec<symbios_tensor::BuildingLot>,
+);
 
 /// Which base terrain generation algorithm to use.
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
@@ -36,6 +40,7 @@ pub struct TerrainConfig {
     pub grid_size: u32,
     pub cell_scale: f32,
     pub height_scale: f32,
+    pub water_level: f32,
 
     // Algorithm selection
     pub generator_kind: GeneratorKind,
@@ -77,6 +82,7 @@ impl Default for TerrainConfig {
             grid_size: 512,
             cell_scale: 1.0,
             height_scale: 40.0,
+            water_level: 0.2,
 
             seed: 42,
             octaves: 6,

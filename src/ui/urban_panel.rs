@@ -17,7 +17,7 @@ pub fn render_urban_ui(
 
     egui::Window::new("Urban Planner")
         .default_width(300.0)
-        .anchor(egui::Align2::LEFT_BOTTOM, egui::Vec2::new(10.0, -10.0))
+        .default_pos((710.0, 10.0))
         .show(ctx, |ui| {
             let mut changed = false;
 
@@ -32,12 +32,7 @@ pub fn render_urban_ui(
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.checkbox(&mut config.show_gizmos, "Show Road Gizmos");
-                        changed |= slider(
-                            ui,
-                            &mut config.tensor.step_size,
-                            "Step Size",
-                            0.5..=5.0,
-                        );
+                        changed |= slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=5.0);
                         changed |= slider(
                             ui,
                             &mut config.tensor.major_road_dist,
@@ -56,8 +51,7 @@ pub fn render_urban_ui(
                             "Snap Radius",
                             1.0..=10.0,
                         );
-                        changed |=
-                            slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
+                        changed |= slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
                     });
 
                 // ── Blocks ──────────────────────────────────────────
@@ -68,10 +62,7 @@ pub fn render_urban_ui(
                         ui.checkbox(&mut config.show_block_gizmos, "Show Block Outlines");
                         ui.checkbox(&mut config.show_block_centroids, "Show Block Centroids");
 
-                        let block_count = current_rg
-                            .0
-                            .as_ref()
-                            .map_or(0, |g| g.blocks.len());
+                        let block_count = current_rg.0.as_ref().map_or(0, |g| g.blocks.len());
                         ui.label(format!("Blocks: {block_count}"));
                     });
 
@@ -100,24 +91,12 @@ pub fn render_urban_ui(
                             "Front Setback",
                             0.0..=10.0,
                         );
-                        changed |= slider(
-                            ui,
-                            &mut config.lot.side_setback,
-                            "Side Setback",
-                            0.0..=5.0,
-                        );
-                        changed |= slider(
-                            ui,
-                            &mut config.lot.rear_setback,
-                            "Rear Setback",
-                            0.0..=10.0,
-                        );
-                        changed |= slider(
-                            ui,
-                            &mut config.lot_blend_radius,
-                            "Blend Radius",
-                            0.0..=30.0,
-                        );
+                        changed |=
+                            slider(ui, &mut config.lot.side_setback, "Side Setback", 0.0..=5.0);
+                        changed |=
+                            slider(ui, &mut config.lot.rear_setback, "Rear Setback", 0.0..=10.0);
+                        changed |=
+                            slider(ui, &mut config.lot_blend_radius, "Blend Radius", 0.0..=30.0);
 
                         ui.label(format!("Lots: {}", current_lots.0.len()));
                     });
