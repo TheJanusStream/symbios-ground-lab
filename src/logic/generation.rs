@@ -1,3 +1,7 @@
+use crate::core::config::{
+    CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, GeneratorKind, TerrainConfig,
+};
+use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::tasks::futures_lite::future;
@@ -5,10 +9,6 @@ use symbios_ground::HeightMap;
 use symbios_ground::{
     DiamondSquare, FbmNoise, HydraulicErosion, TerrainGenerator, ThermalErosion, VoronoiTerracing,
 };
-use crate::core::config::{
-    CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, GeneratorKind, TerrainConfig,
-};
-use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 
 /// Spawns an async task to generate the terrain when `DirtyFlags::terrain` is set.
 pub fn start_generation(
@@ -51,14 +51,15 @@ pub fn poll_generation(
 // Pure terrain generation (runs on a thread pool worker)
 // ---------------------------------------------------------------------------
 
-type GenerationResult = (HeightMap, Option<symbios_tensor::RoadGraph>, Vec<symbios_tensor::BuildingLot>);
+type GenerationResult = (
+    HeightMap,
+    Option<symbios_tensor::RoadGraph>,
+    Vec<symbios_tensor::BuildingLot>,
+);
 
 /// Generates a heightmap, optionally a road graph and building lots, then
 /// carves roads into the terrain before erosion passes run.
-pub fn generate_terrain(
-    cfg: &TerrainConfig,
-    u_cfg: &UrbanConfig,
-) -> GenerationResult {
+pub fn generate_terrain(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> GenerationResult {
     let (mut hm, road_graph, lots) = generate_heightmap_inner(cfg, u_cfg);
 
     // Calculate absolute water level based on the height scale
@@ -86,7 +87,7 @@ pub fn generate_terrain(
             .with_iterations(cfg.thermal_iterations)
             .with_talus_angle(cfg.thermal_talus_angle)
             .with_water_level(absolute_water_level)
-            .with_underwater_talus_angle(0.01) 
+            .with_underwater_talus_angle(0.01)
             .erode(&mut hm);
     }
 
@@ -137,11 +138,26 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
     let mut road_graph = None;
     let mut lots = Vec::new();
     if u_cfg.enabled {
-        let mut graph = symbios_tensor::generate_roads(&hm, &u_cfg.tensor);
-        symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width);
+        // 1. Convert percentage water_level to absolute world height
+        let absolute_water = cfg.water_level * cfg.height_scale;
+
+        let mut t_cfg = u_cfg.tensor.clone();
+        t_cfg.water_level = absolute_water; // Inject into TensorConfig
+
+        // 2. Trace the initial network (Water-aware)
+        let mut graph = symbios_tensor::generate_roads(&hm, &t_cfg);
+
+        // 3. Extract Blocks and Lots
         symbios_tensor::extract_blocks(&mut graph);
         lots = symbios_tensor::extract_lots(&graph, &u_cfg.lot);
+
+        // 4. SYNAPTIC PRUNING: Gut the empty roads!
+        symbios_tensor::prune_unused_roads(&mut graph, &lots);
+
+        // 5. Carve terrain (only the surviving active roads will carve!)
+        symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width);
         symbios_tensor::carve_lots(&lots, &mut hm, u_cfg.lot_blend_radius);
+
         road_graph = Some(graph);
     }
 
