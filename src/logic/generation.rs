@@ -149,7 +149,7 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
 
         // 3. Extract Blocks and Lots
         symbios_tensor::extract_blocks(&mut graph);
-        lots = symbios_tensor::extract_lots(&graph, &u_cfg.lot);
+        lots = symbios_tensor::extract_lots(&graph, &hm, absolute_water, &u_cfg.lot);
 
         // 4. SYNAPTIC PRUNING: Gut the empty roads!
         symbios_tensor::prune_unused_roads(&mut graph, &lots);
