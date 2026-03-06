@@ -1,8 +1,10 @@
 use bevy::{pbr::MaterialPlugin, prelude::*};
 use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
 use bevy_panorbit_camera::PanOrbitCameraPlugin;
+use bevy_symbios_shape::BevySymbiosShapePlugin;
 use bevy_symbios_texture::SymbiosTexturePlugin;
 
+use symbios_ground_lab::core::architecture_config::ArchitectureConfig;
 use symbios_ground_lab::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, ExportStatus, ExportTask,
     GenerationTask, TerrainConfig, TerrainDebounce,
@@ -29,6 +31,7 @@ fn main() {
             EguiPlugin::default(),
             PanOrbitCameraPlugin,
             SymbiosTexturePlugin,
+            BevySymbiosShapePlugin,
             MaterialPlugin::<SplatTerrainMaterial>::default(),
             MaterialPlugin::<WaterMaterial>::default(),
         ))
@@ -47,10 +50,16 @@ fn main() {
         .init_resource::<UrbanConfig>()
         .init_resource::<CurrentRoadGraph>()
         .init_resource::<CurrentBuildingLots>()
+        .init_resource::<ArchitectureConfig>()
         // ── Startup ───────────────────────────────────────────────────────
         .add_systems(
             Startup,
-            (visuals::scene::setup_scene, visuals::terrain::spawn_terrain).chain(),
+            (
+                visuals::scene::setup_scene,
+                visuals::terrain::spawn_terrain,
+                visuals::building_materials::setup_building_materials,
+            )
+                .chain(),
         )
         // ── UI (egui pass) ────────────────────────────────────────────────
         .add_systems(
@@ -59,6 +68,7 @@ fn main() {
                 ui::panel::render_ui,
                 ui::material_panel::render_material_ui,
                 ui::urban_panel::render_urban_ui,
+                ui::architecture_panel::render_architecture_ui,
             ),
         )
         // ── Update ────────────────────────────────────────────────────────
@@ -80,6 +90,8 @@ fn main() {
                 visuals::material::start_texture_tasks,
                 visuals::material::collect_texture_results,
                 visuals::material::apply_splat_material,
+                visuals::buildings::rebuild_buildings,
+                visuals::building_materials::apply_building_textures,
             )
                 .chain(),
         )

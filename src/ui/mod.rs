@@ -7,6 +7,7 @@
 //!   texture resolution, tile scale, and per-layer splat rules + texture generator
 //!   parameters.
 
+pub mod architecture_panel;
 pub mod material_panel;
 pub mod panel;
 pub mod urban_panel;

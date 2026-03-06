@@ -7,6 +7,7 @@
 //!   (splat rules + texture parameters) and
 //!   [`MaterialState`](material_config::MaterialState) (async pipeline progress).
 
+pub mod architecture_config;
 pub mod config;
 pub mod material_config;
 pub mod urban_config;

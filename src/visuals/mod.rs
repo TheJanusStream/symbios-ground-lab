@@ -10,6 +10,8 @@
 //!   `MaterialExtension` type and its GPU bindings.
 //! - [`export`] — PNG heightmap, OBJ mesh, and JSON config export (native + WASM).
 
+pub mod building_materials;
+pub mod buildings;
 pub mod droplets;
 pub mod export;
 pub mod material;

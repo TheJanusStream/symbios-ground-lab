@@ -8,8 +8,10 @@ bevy = "0.18"
 bevy_egui = "0.39"
 bevy_panorbit_camera = { version = "0.34", features = ["bevy_egui"] }
 symbios-ground = { path = "../symbios-ground" }
+symbios-shape = { path = "../symbios-shape" }
 symbios-tensor = { path = "../symbios-tensor" }
 bevy_symbios_ground = { path = "../bevy_symbios_ground" }
+bevy_symbios_shape = { path = "../bevy_symbios_shape" }
 bevy_symbios_texture = { path = "../bevy_symbios_texture", features = ["egui"] }
 rand = "0.9"
 serde = { version = "1.0", features = ["derive", "rc"] }
