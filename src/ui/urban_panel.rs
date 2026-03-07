@@ -52,6 +52,12 @@ pub fn render_urban_ui(
                             1.0..=10.0,
                         );
                         changed |= slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
+                        changed |= slider(
+                            ui,
+                            &mut config.road_blend_radius,
+                            "Blend Radius",
+                            0.0..=30.0,
+                        );
                     });
 
                 // ── Blocks ──────────────────────────────────────────
