@@ -19,21 +19,19 @@ pub fn rebuild_buildings(
     existing_q: Query<Entity, With<BuildingRoot>>,
     hm: Res<CurrentHeightMap>,
 ) {
-    // Only run if architecture is enabled and lots exist
-    if !arch_config.enabled || lots.0.is_empty() {
-        return;
-    }
-
-    // We need a trigger. Let's say if lots changed OR arch_config changed.
-    // Ideally we add `DirtyFlags::architecture`.
-    // For now, let's assume we run when `lots` is changed.
+    // Only rebuild when something actually changed.
     if !lots.is_changed() && !arch_config.is_changed() {
         return;
     }
 
-    // 1. Cleanup
+    // 1. Cleanup (always runs so disabling or clearing lots despawns buildings)
     for e in &existing_q {
         commands.entity(e).despawn();
+    }
+
+    // Nothing to spawn if architecture is disabled or there are no lots.
+    if !arch_config.enabled || lots.0.is_empty() {
+        return;
     }
 
     // 2. Parse Grammar

@@ -1,12 +1,40 @@
 // src/core/architecture_config.rs
 
 use bevy::prelude::*;
+use bevy::time::Timer;
 use serde::{Deserialize, Serialize};
 use bevy_symbios_texture::{
     brick::BrickConfig, stucco::StuccoConfig, concrete::ConcreteConfig,
     shingle::ShingleConfig, plank::PlankConfig, window::WindowConfig,
     metal::MetalConfig,
 };
+
+/// Runtime state for debounced building-material texture regeneration.
+///
+/// Mirrors the debounce pattern used by [`MaterialState`] for the terrain splat
+/// pipeline: the architecture UI sets `texture_debounce_pending` when a texture
+/// parameter is committed, and the timer gates the actual `PendingTexture`
+/// spawn to avoid flooding the thread pool during continuous slider drags.
+#[derive(Resource)]
+pub struct ArchitectureMaterialState {
+    /// Set by the UI when a texture parameter changes; cleared once textures
+    /// are re-spawned.
+    pub textures_dirty: bool,
+    /// True while the debounce timer is counting down.
+    pub texture_debounce_pending: bool,
+    /// Fires once after the debounce delay, triggering `textures_dirty`.
+    pub texture_debounce_timer: Timer,
+}
+
+impl Default for ArchitectureMaterialState {
+    fn default() -> Self {
+        Self {
+            textures_dirty: false,
+            texture_debounce_pending: false,
+            texture_debounce_timer: Timer::from_seconds(0.3, TimerMode::Once),
+        }
+    }
+}
 
 #[derive(Resource, Clone, Serialize, Deserialize)]
 pub struct ArchitectureConfig {

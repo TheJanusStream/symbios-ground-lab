@@ -1,122 +1,85 @@
-use crate::core::architecture_config::ArchitectureConfig;
+use crate::core::architecture_config::{ArchitectureConfig, ArchitectureMaterialState};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
+use bevy_symbios_texture::ui::{
+    brick_config_editor, concrete_config_editor, metal_config_editor, plank_config_editor,
+    shingle_config_editor, stucco_config_editor, window_config_editor,
+};
 
-pub fn render_architecture_ui(mut contexts: EguiContexts, mut config: ResMut<ArchitectureConfig>) {
+pub fn render_architecture_ui(
+    mut contexts: EguiContexts,
+    mut config: ResMut<ArchitectureConfig>,
+    mut mat_state: ResMut<ArchitectureMaterialState>,
+) {
     let Ok(ctx) = contexts.ctx_mut() else { return };
 
-    egui::Window::new("Architect")
-        .default_width(400.0)
-        .default_pos((10.0, 500.0)) // Positioned below Terraformer
-        .vscroll(true)
-        .show(ctx, |ui| {
-            ui.checkbox(&mut config.enabled, "Enable Architecture");
+    let mut texture_changed = false;
 
-            if !config.enabled {
-                return;
-            }
+    {
+        let cfg = config.bypass_change_detection();
 
-            ui.separator();
-            ui.heading("Grammar Source");
-            ui.label("Edit the CGA rules below. Changes trigger a rebuild.");
+        egui::Window::new("Architect")
+            .default_width(400.0)
+            .default_pos((10.0, 500.0))
+            .vscroll(true)
+            .show(ctx, |ui| {
+                let prev_enabled = cfg.enabled;
+                ui.checkbox(&mut cfg.enabled, "Enable Architecture");
+                if cfg.enabled != prev_enabled {
+                    texture_changed = true;
+                }
 
-            // Code Editor
-            egui::ScrollArea::vertical()
-                .min_scrolled_height(200.0)
-                .max_height(400.0)
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut config.grammar_source)
-                            .font(egui::TextStyle::Monospace)
-                            .code_editor()
-                            .desired_width(f32::INFINITY),
-                    );
-                });
+                if !cfg.enabled {
+                    return;
+                }
 
-            ui.separator();
-            ui.heading("Material Styles");
+                ui.separator();
+                ui.heading("Grammar Source");
+                ui.label("Edit the CGA rules below. Changes trigger a rebuild.");
 
-            // ── Material Configs ──────────────────────────────────────────
-            // We use simple manual sliders here to ensure robustness without
-            // relying on internal UI helpers from bevy_symbios_texture.
+                egui::ScrollArea::vertical()
+                    .min_scrolled_height(200.0)
+                    .max_height(400.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut cfg.grammar_source)
+                                .font(egui::TextStyle::Monospace)
+                                .code_editor()
+                                .desired_width(f32::INFINITY),
+                        );
+                    });
 
-            egui::CollapsingHeader::new("Brick (Main Facade)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    color_edit(ui, &mut config.brick.color_brick, "Brick Color");
-                    ui.add(
-                        egui::Slider::new(&mut config.brick.scale, 1.0..=20.0)
-                            .text("Texture Scale"),
-                    );
-                    ui.add(
-                        egui::Slider::new(&mut config.brick.roughness, 0.0..=1.0).text("Roughness"),
-                    );
-                });
+                ui.separator();
+                ui.heading("Material Styles");
 
-            egui::CollapsingHeader::new("Stucco (Upper Facade)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    color_edit(ui, &mut config.stucco.color_base, "Base Color");
-                    ui.add(
-                        egui::Slider::new(&mut config.stucco.roughness, 0.0..=1.0)
-                            .text("Roughness"),
-                    );
-                });
+                /// Returns the `regen` flag from a config editor shown inside a
+                /// collapsing header. `false` when the header is collapsed.
+                macro_rules! mat_section {
+                    ($ui:expr, $label:expr, $editor:expr) => {
+                        egui::CollapsingHeader::new($label)
+                            .default_open(false)
+                            .show($ui, |ui| {
+                                let id = egui::Id::new(("arch", $label));
+                                $editor(ui, id).1
+                            })
+                            .body_returned
+                            .unwrap_or(false)
+                    };
+                }
 
-            egui::CollapsingHeader::new("Concrete (Trim/Frames)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    color_edit(ui, &mut config.concrete.color_base, "Color");
-                    ui.add(
-                        egui::Slider::new(&mut config.concrete.formwork_lines, 0.0..=10.0)
-                            .text("Formwork Lines"),
-                    );
-                });
+                texture_changed |= mat_section!(ui, "Brick (Main Facade)", |ui: &mut egui::Ui, id| brick_config_editor(ui, &mut cfg.brick, id));
+                texture_changed |= mat_section!(ui, "Stucco (Upper Facade)", |ui: &mut egui::Ui, id| stucco_config_editor(ui, &mut cfg.stucco, id));
+                texture_changed |= mat_section!(ui, "Concrete (Trim/Frames)", |ui: &mut egui::Ui, id| concrete_config_editor(ui, &mut cfg.concrete, id));
+                texture_changed |= mat_section!(ui, "Shingle (Roof)", |ui: &mut egui::Ui, id| shingle_config_editor(ui, &mut cfg.shingle, id));
+                texture_changed |= mat_section!(ui, "Wood (Doors/Decks)", |ui: &mut egui::Ui, id| plank_config_editor(ui, &mut cfg.wood, id));
+                texture_changed |= mat_section!(ui, "Glass (Windows)", |ui: &mut egui::Ui, id| window_config_editor(ui, &mut cfg.glass, id));
+                texture_changed |= mat_section!(ui, "Metal (Fascia/Gutters)", |ui: &mut egui::Ui, id| metal_config_editor(ui, &mut cfg.metal, id));
+            });
+    }
 
-            egui::CollapsingHeader::new("Shingle (Roof)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    color_edit(ui, &mut config.shingle.color_tile, "Tile Color");
-                    ui.add(egui::Slider::new(&mut config.shingle.scale, 1.0..=20.0).text("Scale"));
-                });
-
-            egui::CollapsingHeader::new("Wood (Doors/Decks)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    color_edit(ui, &mut config.wood.color_wood_light, "Light Wood");
-                    color_edit(ui, &mut config.wood.color_wood_dark, "Dark Wood");
-                });
-
-            egui::CollapsingHeader::new("Glass (Windows)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::Slider::new(&mut config.glass.glass_opacity, 0.0..=1.0)
-                            .text("Opacity"),
-                    );
-                    ui.add(
-                        egui::Slider::new(&mut config.glass.grime_level, 0.0..=1.0).text("Grime Level"),
-                    );
-                });
-
-            egui::CollapsingHeader::new("Metal (Fascia/Gutters)")
-                .default_open(false)
-                .show(ui, |ui| {
-                    color_edit(ui, &mut config.metal.color_metal, "Base Color");
-                    ui.add(
-                        egui::Slider::new(&mut config.metal.metallic, 0.0..=1.0).text("Metallic"),
-                    );
-                    ui.add(
-                        egui::Slider::new(&mut config.metal.roughness, 0.0..=1.0)
-                            .text("Roughness"),
-                    );
-                });
-        });
-}
-
-fn color_edit(ui: &mut egui::Ui, rgb: &mut [f32; 3], label: &str) {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.color_edit_button_rgb(rgb);
-    });
+    if texture_changed {
+        config.set_changed();
+        mat_state.texture_debounce_timer.reset();
+        mat_state.texture_debounce_pending = true;
+    }
 }
