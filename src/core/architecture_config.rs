@@ -59,14 +59,14 @@ impl Default for ArchitectureConfig {
             // Uses floating splits (~) for main masses to fit any lot size.
             grammar_source: r#"
 // Massing - Elastic ratio ~7:3 (approx 14:6)
-Lot --> Split(X) { ~7: HouseMass | ~3: GarageMass }
-HouseMass --> Split(Z) { 3: DeckArea | ~1: MainHouse }
-GarageMass --> Split(Z) { 4: Driveway | ~1: GarageStruct }
+Lot --> 50% Split(X) { ~7: HouseMass | ~3: GarageMass } | 50% HouseMass
+HouseMass --> Split(Z) { ~1: MainHouse | 3: DeckArea }
+GarageMass --> Split(Z) { ~1: GarageStruct | 4: Driveway }
 
 DeckArea --> Extrude(0.3) Mat("Wood") I("Deck")
 Driveway --> Extrude(0.1) Mat("Pavers") I("Drive")
 
-MainHouse --> Extrude(9.5) Split(Y) { 3.5: GroundFloor | 0.3: BeltCourse | 3.2: UpperFloor | 0.3: RoofFascia | 2.2: MainRoof }
+MainHouse --> 33% Extrude(6.0) Split(Y) { 3.5: GroundFloor | 0.3: BeltCourse | 2.2: MainRoof } | 33% Extrude(9.5) Split(Y) { 3.5: GroundFloor | 0.3: BeltCourse | 3.2: UpperFloor | 0.3: RoofFascia | 2.2: MainRoof } | 33% Extrude(13.0) Split(Y) { 3.5: GroundFloor | 0.3: BeltCourse | 3.2: UpperFloor | 0.3: BeltCourse | 3.2: UpperFloor | 0.3: RoofFascia | 2.2: MainRoof }
 GarageStruct --> Extrude(4.0) Split(Y) { 3.5: GarageBody | 0.5: GarageRoof }
 
 MainRoof --> Roof(Gable, 30) { Slope: ShingleSlope | GableEnd: GableWall }
@@ -82,7 +82,7 @@ BeltFace --> Extrude(0.25) Mat("Concrete") I("Trim")
 RoofFascia --> Comp(Faces) { Side: FasciaFace }
 FasciaFace --> Extrude(0.05) Mat("Metal") I("Fascia")
 
-GroundFloor --> Comp(Faces) { Front: FrontEntryFacade | Back: SideFacade | Left: SideFacade | Right: SideFacade }
+GroundFloor --> Comp(Faces) { Front: SideFacade | Back: FrontEntryFacade | Left: SideFacade | Right: SideFacade }
 // Elastic Facade: scales elements to fit width
 FrontEntryFacade --> Split(X) { ~1.5: BrickWall | ~2.5: EntryDoor | ~1.0: BrickWall | ~4.0: PictureWindow | ~1: BrickWall }
 SideFacade --> Repeat(X, 4.0) { SideBay }
@@ -92,7 +92,7 @@ UpperFloor --> Comp(Faces) { Side: UpperFacade }
 UpperFacade --> Repeat(X, 3.5) { UpperBay }
 UpperBay --> Split(X) { ~1: StuccoWall | 1.5: StandardWindowStucco | ~1: StuccoWall }
 
-GarageBody --> Comp(Faces) { Front: GarageFront | Back: BrickWall | Left: BrickWall | Right: BrickWall }
+GarageBody --> Comp(Faces) { Front: BrickWall | Back: GarageFront | Left: BrickWall | Right: BrickWall }
 GarageFront --> Split(X) { ~1: BrickWall | ~5.0: GarageDoor | ~1: BrickWall }
 
 StandardWindowBrick --> Split(Y) { 0.9: BrickWall | 1.6: WinAssembly | ~1: BrickWall }

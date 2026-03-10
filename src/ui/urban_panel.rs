@@ -32,24 +32,24 @@ pub fn render_urban_ui(
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.checkbox(&mut config.show_gizmos, "Show Road Gizmos");
-                        changed |= slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=5.0);
+                        changed |= slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=15.0);
                         changed |= slider(
                             ui,
                             &mut config.tensor.major_road_dist,
                             "Major Road Dist",
-                            10.0..=100.0,
+                            10.0..=300.0,
                         );
                         changed |= slider(
                             ui,
                             &mut config.tensor.minor_road_dist,
                             "Minor Road Dist",
-                            5.0..=50.0,
+                            5.0..=150.0,
                         );
                         changed |= slider(
                             ui,
                             &mut config.tensor.snap_radius,
                             "Snap Radius",
-                            1.0..=10.0,
+                            1.0..=30.0,
                         );
                         changed |= slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
                         changed |= slider(
