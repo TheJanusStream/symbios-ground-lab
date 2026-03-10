@@ -145,20 +145,25 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
         t_cfg.water_level = absolute_water; // Inject into TensorConfig
 
         // 2. Trace the initial network (Water-aware)
-        let mut graph = symbios_tensor::generate_roads(&hm, &t_cfg);
+        match symbios_tensor::generate_roads(&hm, &t_cfg) {
+            Ok(mut graph) => {
+                // 3. Extract Blocks and Lots
+                symbios_tensor::extract_blocks(&mut graph);
+                lots = symbios_tensor::extract_lots(&graph, &hm, absolute_water, &u_cfg.lot);
 
-        // 3. Extract Blocks and Lots
-        symbios_tensor::extract_blocks(&mut graph);
-        lots = symbios_tensor::extract_lots(&graph, &hm, absolute_water, &u_cfg.lot);
+                // 4. SYNAPTIC PRUNING: Gut the empty roads!
+                symbios_tensor::prune_unused_roads(&mut graph, &lots);
 
-        // 4. SYNAPTIC PRUNING: Gut the empty roads!
-        symbios_tensor::prune_unused_roads(&mut graph, &lots);
+                // 5. Carve terrain (only the surviving active roads will carve!)
+                let road_surface = symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width, u_cfg.road_blend_radius);
+                symbios_tensor::carve_lots(&lots, &mut hm, u_cfg.lot_blend_radius, Some(&road_surface));
 
-        // 5. Carve terrain (only the surviving active roads will carve!)
-        let road_surface = symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width, u_cfg.road_blend_radius);
-        symbios_tensor::carve_lots(&lots, &mut hm, u_cfg.lot_blend_radius, Some(&road_surface));
-
-        road_graph = Some(graph);
+                road_graph = Some(graph);
+            }
+            Err(e) => {
+                bevy::log::warn!("Road generation skipped: {e}");
+            }
+        }
     }
 
     (hm, road_graph, lots)
