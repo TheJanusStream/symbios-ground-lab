@@ -39,6 +39,7 @@ impl Default for ArchitectureMaterialState {
 #[derive(Resource, Clone, Serialize, Deserialize)]
 pub struct ArchitectureConfig {
     pub enabled: bool,
+    pub max_buildings: usize,
     pub grammar_source: String,
     
     // Texture Configs
@@ -55,6 +56,7 @@ impl Default for ArchitectureConfig {
     fn default() -> Self {
         Self {
             enabled: true,
+            max_buildings: 100,
             // ELASTIC VILLA GRAMMAR
             // Uses floating splits (~) for main masses to fit any lot size.
             grammar_source: r#"

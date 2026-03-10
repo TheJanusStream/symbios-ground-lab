@@ -51,10 +51,7 @@ pub fn rebuild_buildings(
     // 3. Spawn Buildings
     let Some(ref heightmap) = hm.0 else { return };
 
-    // Optimization: Cap at 50 buildings for stability during dev
-    let max_buildings = 100;
-
-    for (i, lot) in lots.0.iter().take(max_buildings).enumerate() {
+    for (i, lot) in lots.0.iter().take(arch_config.max_buildings).enumerate() {
         // Set seed for stability
         interp.seed = (i as u64) * 12345 + 99;
 

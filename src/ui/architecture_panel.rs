@@ -34,6 +34,9 @@ pub fn render_architecture_ui(
                 }
 
                 ui.separator();
+                ui.add(egui::Slider::new(&mut cfg.max_buildings, 0..=1000).text("Max Buildings"));
+
+                ui.separator();
                 ui.heading("Grammar Source");
                 ui.label("Edit the CGA rules below. Changes trigger a rebuild.");
 
