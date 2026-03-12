@@ -1,3 +1,10 @@
+//! Procedural building generation from CGA grammar rules.
+//!
+//! Parses the grammar source from [`ArchitectureConfig`], then for each
+//! building lot derives a shape tree starting from the `Lot` axiom.
+//! Resulting geometry is spawned via [`bevy_symbios_shape::SpawnShapeExt`]
+//! and tagged with [`BuildingRoot`] for bulk despawn on regeneration.
+
 use crate::core::architecture_config::ArchitectureConfig;
 use crate::core::config::{CurrentHeightMap, DirtyFlags};
 use crate::core::urban_config::CurrentBuildingLots;
@@ -5,9 +12,13 @@ use bevy::prelude::*;
 use bevy_symbios_shape::{ShapeRegistry, SpawnShapeExt};
 use symbios_shape::{Interpreter, Quat as DQuat, Scope, Vec3 as DVec3, grammar::parse_rule};
 
+/// Marker component for the root entity of each generated building.
 #[derive(Component)]
 pub struct BuildingRoot;
 
+/// Despawns existing buildings and regenerates them from the current lots,
+/// grammar, and architecture config whenever those resources change.
+#[allow(clippy::too_many_arguments)]
 pub fn rebuild_buildings(
     mut commands: Commands,
     lots: Res<CurrentBuildingLots>,

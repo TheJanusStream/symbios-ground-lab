@@ -1,4 +1,9 @@
-// src/core/architecture_config.rs
+//! Architecture configuration and building-material regeneration state.
+//!
+//! Holds [`ArchitectureConfig`] (CGA grammar source, max-buildings cap, and
+//! per-material texture configs for brick, stucco, concrete, shingle, wood,
+//! glass, and metal) and [`ArchitectureMaterialState`] (debounce timer for
+//! texture regeneration triggered by the Architect UI).
 
 use bevy::prelude::*;
 use bevy::time::Timer;
@@ -36,12 +41,20 @@ impl Default for ArchitectureMaterialState {
     }
 }
 
+/// All user-facing architecture parameters.
+///
+/// Controls whether procedural buildings are generated, the maximum number of
+/// buildings to place, the CGA grammar source that drives shape derivation,
+/// and the procedural texture configuration for each building material type.
 #[derive(Resource, Clone, Serialize, Deserialize)]
 pub struct ArchitectureConfig {
+    /// Whether procedural building generation is active.
     pub enabled: bool,
+    /// Upper bound on the number of buildings spawned across all lots.
     pub max_buildings: usize,
+    /// CGA grammar source text parsed by [`symbios_shape::grammar::parse_rule`].
     pub grammar_source: String,
-    
+
     // Texture Configs
     pub brick: BrickConfig,
     pub stucco: StuccoConfig,

@@ -1,3 +1,11 @@
+//! Architect GUI window.
+//!
+//! Provides an enable toggle, a max-buildings slider, a live CGA grammar
+//! editor (monospace text area), and collapsible per-material texture config
+//! sections for each building material (Brick, Stucco, Concrete, Shingle,
+//! Wood, Glass, Metal). Texture parameter changes are debounced through
+//! [`ArchitectureMaterialState`].
+
 use crate::core::architecture_config::{ArchitectureConfig, ArchitectureMaterialState};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
@@ -6,6 +14,12 @@ use bevy_symbios_texture::ui::{
     shingle_config_editor, stucco_config_editor, window_config_editor,
 };
 
+/// Render the "Architect" egui window.
+///
+/// Runs every frame in the [`EguiPrimaryContextPass`] schedule. Provides an
+/// enable toggle, max-buildings slider, a live CGA grammar text editor, and
+/// collapsible material config sections. Texture parameter changes are routed
+/// through [`ArchitectureMaterialState`] debounce.
 pub fn render_architecture_ui(
     mut contexts: EguiContexts,
     mut config: ResMut<ArchitectureConfig>,

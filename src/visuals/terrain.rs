@@ -15,6 +15,7 @@ use crate::{
 #[derive(Component)]
 pub struct TerrainMesh;
 
+/// Marker component for the water-level volume entity (translucent cuboid).
 #[derive(Component)]
 pub struct WaterVolume;
 

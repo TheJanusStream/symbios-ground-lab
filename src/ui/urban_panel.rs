@@ -1,3 +1,11 @@
+//! Urban Planner GUI window.
+//!
+//! Exposes all [`UrbanConfig`] parameters: tensor-field road generation
+//! (step size, major/minor road distance, snap radius), road rendering
+//! (width, spline resolution, hub segments, 3D toggle), block and lot
+//! subdivision settings, gizmo visibility toggles, and an embedded asphalt
+//! material editor for road surfaces.
+
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use bevy_symbios_texture::ui::asphalt_config_editor;

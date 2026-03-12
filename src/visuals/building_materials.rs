@@ -1,3 +1,12 @@
+//! Async procedural texture pipeline for building facade materials.
+//!
+//! At startup, [`setup_building_materials`] registers a `StandardMaterial` and
+//! spawns a [`PendingTexture`] task for each material key (Brick, Stucco,
+//! Concrete, Shingle, Wood, Metal, Glass, Pavers). When the async generation
+//! completes, [`apply_building_textures`] wires the albedo, normal, and
+//! roughness maps into the material. [`regenerate_building_textures`] handles
+//! debounced re-generation when the Architect UI changes texture parameters.
+
 use crate::core::architecture_config::{ArchitectureConfig, ArchitectureMaterialState};
 use bevy::prelude::*;
 use bevy_symbios_shape::ShapeRegistry;

@@ -1,3 +1,10 @@
+//! 3D road mesh generation from the tensor-field road graph.
+//!
+//! Converts [`CurrentRoadGraph`](crate::core::urban_config::CurrentRoadGraph)
+//! into renderable Bevy meshes: intersection hubs (regular polygons) and
+//! spline-sampled ribbons connecting them. Meshes are despawned and rebuilt
+//! whenever the road graph or [`UrbanConfig`](crate::core::urban_config::UrbanConfig) changes.
+
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 

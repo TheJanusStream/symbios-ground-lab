@@ -8,7 +8,18 @@
 //!   texture tasks, collects results, and uploads the weight map to the GPU.
 //! - [`splat_material`] — the [`SplatExtension`](splat_material::SplatExtension)
 //!   `MaterialExtension` type and its GPU bindings.
+//! - [`water_material`] — the [`WaterExtension`](water_material::WaterExtension)
+//!   `MaterialExtension` type for the animated water surface shader.
 //! - [`export`] — PNG heightmap, OBJ mesh, and JSON config export (native + WASM).
+//! - [`buildings`] — CGA grammar-driven procedural building generation on
+//!   subdivided lots; spawns hierarchical shape entities via `bevy_symbios_shape`.
+//! - [`building_materials`] — async procedural texture pipeline for building
+//!   facades (brick, stucco, concrete, shingle, wood, glass, metal).
+//! - [`roads`] — 3D road mesh generation (hub polygons + spline ribbons) from
+//!   the tensor-field road graph.
+//! - [`road_materials`] — async asphalt texture pipeline for road surfaces.
+//! - [`urban_gizmos`] — debug gizmo overlays for road edges, city block
+//!   perimeters/centroids, and building lot footprints.
 
 pub mod building_materials;
 pub mod buildings;

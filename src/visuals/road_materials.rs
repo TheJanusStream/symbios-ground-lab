@@ -1,3 +1,10 @@
+//! Async asphalt texture pipeline for road surfaces.
+//!
+//! [`setup_road_materials`] creates the initial `StandardMaterial` and spawns
+//! the first [`PendingTexture`] task. [`regenerate_road_textures`] debounces
+//! config changes from the Urban Planner UI, and [`apply_road_textures`] wires
+//! completed albedo, normal, and roughness maps into the material.
+
 use bevy::prelude::*;
 use bevy_symbios_texture::async_gen::{PendingTexture, TextureReady};
 

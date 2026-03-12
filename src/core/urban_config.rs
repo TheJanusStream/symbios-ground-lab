@@ -1,3 +1,9 @@
+//! Urban generation configuration and runtime state.
+//!
+//! Holds [`UrbanConfig`] (tensor-field road parameters, lot subdivision rules,
+//! road rendering options) and the runtime resources that carry the generated
+//! road graph and building lots between systems.
+
 use bevy::prelude::*;
 use bevy::time::Timer;
 use bevy_symbios_texture::asphalt::AsphaltConfig;

@@ -1,3 +1,11 @@
+//! Debug gizmo overlays for urban generation output.
+//!
+//! Renders road graph edges (major = yellow, minor = cyan), city block
+//! perimeters (green outlines) with optional centroids (magenta spheres),
+//! and building lot footprints (orange oriented rectangles). All gizmos are
+//! drawn slightly above the terrain surface to avoid z-fighting and can be
+//! individually toggled from the Urban Planner UI.
+
 use bevy::prelude::*;
 
 use crate::core::config::CurrentHeightMap;
