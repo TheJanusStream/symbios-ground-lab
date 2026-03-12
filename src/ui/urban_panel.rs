@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
+use bevy_symbios_texture::ui::asphalt_config_editor;
 
 use crate::core::config::{DirtyFlags, TerrainDebounce};
-use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
+use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, RoadMaterialState, UrbanConfig};
 
 /// Render the "Urban Planner" egui window.
 pub fn render_urban_ui(
@@ -10,10 +11,13 @@ pub fn render_urban_ui(
     mut config: ResMut<UrbanConfig>,
     mut dirty: ResMut<DirtyFlags>,
     mut debounce: ResMut<TerrainDebounce>,
+    mut road_mat_state: ResMut<RoadMaterialState>,
     current_rg: Res<CurrentRoadGraph>,
     current_lots: Res<CurrentBuildingLots>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else { return };
+
+    let mut texture_changed = false;
 
     egui::Window::new("Urban Planner")
         .default_width(300.0)
@@ -32,6 +36,7 @@ pub fn render_urban_ui(
                     .default_open(true)
                     .show(ui, |ui| {
                         ui.checkbox(&mut config.show_gizmos, "Show Road Gizmos");
+                        ui.checkbox(&mut config.render_roads, "Render 3D Roads");
                         changed |= slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=15.0);
                         changed |= slider(
                             ui,
@@ -58,6 +63,25 @@ pub fn render_urban_ui(
                             "Blend Radius",
                             0.0..=30.0,
                         );
+                        changed |= slider(
+                            ui,
+                            &mut config.road_resolution,
+                            "Spline Resolution",
+                            1.0..=32.0,
+                        );
+                        changed |= ui.add(
+                            egui::Slider::new(&mut config.hub_segments, 3..=32)
+                                .text("Hub Segments"),
+                        ).changed();
+
+                        // Road material editor
+                        egui::CollapsingHeader::new("Road Material")
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                let id = egui::Id::new(("urban", "road_material"));
+                                let (_wb, regen) = asphalt_config_editor(ui, &mut config.road_material, id);
+                                texture_changed |= regen;
+                            });
                     });
 
                 // ── Blocks ──────────────────────────────────────────
@@ -114,6 +138,12 @@ pub fn render_urban_ui(
                 dirty.terrain = false;
             }
         });
+
+    if texture_changed {
+        config.set_changed();
+        road_mat_state.texture_debounce_timer.reset();
+        road_mat_state.texture_debounce_pending = true;
+    }
 }
 
 fn slider(

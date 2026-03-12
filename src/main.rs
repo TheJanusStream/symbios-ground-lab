@@ -10,7 +10,9 @@ use symbios_ground_lab::core::config::{
     GenerationTask, TerrainConfig, TerrainDebounce,
 };
 use symbios_ground_lab::core::material_config::{MaterialConfig, MaterialState};
-use symbios_ground_lab::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
+use symbios_ground_lab::core::urban_config::{
+    CurrentBuildingLots, CurrentRoadGraph, RoadMaterialState, UrbanConfig,
+};
 use symbios_ground_lab::visuals::splat_material::SplatTerrainMaterial;
 use symbios_ground_lab::visuals::water_material::WaterMaterial;
 use symbios_ground_lab::{logic, ui, visuals};
@@ -52,6 +54,7 @@ fn main() {
         .init_resource::<CurrentBuildingLots>()
         .init_resource::<ArchitectureConfig>()
         .init_resource::<ArchitectureMaterialState>()
+        .init_resource::<RoadMaterialState>()
         // ── Startup ───────────────────────────────────────────────────────
         .add_systems(
             Startup,
@@ -59,6 +62,7 @@ fn main() {
                 visuals::scene::setup_scene,
                 visuals::terrain::spawn_terrain,
                 visuals::building_materials::setup_building_materials,
+                visuals::road_materials::setup_road_materials,
             )
                 .chain(),
         )
@@ -94,6 +98,9 @@ fn main() {
                 visuals::building_materials::regenerate_building_textures,
                 visuals::buildings::rebuild_buildings,
                 visuals::building_materials::apply_building_textures,
+                visuals::road_materials::regenerate_road_textures,
+                visuals::roads::rebuild_roads,
+                visuals::road_materials::apply_road_textures,
             )
                 .chain(),
         )

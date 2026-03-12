@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::time::Timer;
+use bevy_symbios_texture::asphalt::AsphaltConfig;
 use serde::{Deserialize, Serialize};
 use symbios_tensor::{BuildingLot, LotConfig, RoadGraph, TensorConfig};
 
@@ -15,6 +17,14 @@ pub struct UrbanConfig {
     pub show_block_gizmos: bool,
     pub show_block_centroids: bool,
     pub show_lot_gizmos: bool,
+    /// Render 3D road meshes (hubs + ribbons).
+    pub render_roads: bool,
+    /// Spline sampling density (subdivisions per graph edge).
+    pub road_resolution: f32,
+    /// Number of polygon sides for intersection hubs (e.g. 8 = octagon).
+    pub hub_segments: u32,
+    /// Material configuration for road surface texture.
+    pub road_material: AsphaltConfig,
 }
 
 impl Default for UrbanConfig {
@@ -38,6 +48,28 @@ impl Default for UrbanConfig {
             show_block_gizmos: true,
             show_block_centroids: true,
             show_lot_gizmos: true,
+            render_roads: true,
+            road_resolution: 8.0,
+            hub_segments: 8,
+            road_material: AsphaltConfig::default(),
+        }
+    }
+}
+
+/// Runtime state for debounced road-material texture regeneration.
+#[derive(Resource)]
+pub struct RoadMaterialState {
+    pub textures_dirty: bool,
+    pub texture_debounce_pending: bool,
+    pub texture_debounce_timer: Timer,
+}
+
+impl Default for RoadMaterialState {
+    fn default() -> Self {
+        Self {
+            textures_dirty: false,
+            texture_debounce_pending: false,
+            texture_debounce_timer: Timer::from_seconds(0.3, TimerMode::Once),
         }
     }
 }
