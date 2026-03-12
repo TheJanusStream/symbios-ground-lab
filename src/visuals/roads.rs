@@ -16,15 +16,22 @@ use crate::visuals::road_materials::RoadMaterialHandle;
 #[derive(Component)]
 pub struct RoadMesh;
 
+/// Handle for the embankment skirt material (dirt/earth).
+#[derive(Resource)]
+pub struct SkirtMaterialHandle(pub Handle<StandardMaterial>);
+
 /// Rebuilds 3D road meshes when the road graph or urban config changes.
+#[allow(clippy::too_many_arguments)]
 pub fn rebuild_roads(
     mut commands: Commands,
     current_rg: Res<CurrentRoadGraph>,
     config: Res<UrbanConfig>,
     hm: Res<CurrentHeightMap>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     existing_q: Query<Entity, With<RoadMesh>>,
     handle_q: Query<&RoadMaterialHandle>,
+    skirt_handle: Option<Res<SkirtMaterialHandle>>,
 ) {
     if !current_rg.is_changed() && !config.is_changed() {
         return;
@@ -45,6 +52,20 @@ pub fn rebuild_roads(
         return;
     };
 
+    // Lazily create skirt material if it doesn't exist yet.
+    let skirt_mat = match skirt_handle {
+        Some(ref h) => h.0.clone(),
+        None => {
+            let h = materials.add(StandardMaterial {
+                base_color: Color::srgb(0.35, 0.28, 0.18),
+                perceptual_roughness: 0.95,
+                ..default()
+            });
+            commands.insert_resource(SkirtMaterialHandle(h.clone()));
+            h
+        }
+    };
+
     let mesh_config = symbios_tensor::RoadMeshConfig {
         major_half_width: config.road_width * 0.5 * 1.5, // Major roads are 1.5x wider
         minor_half_width: config.road_width * 0.5,
@@ -52,6 +73,10 @@ pub fn rebuild_roads(
         depth_bias: 0.05,
         texture_scale: 0.1,
         spline_subdivisions: config.road_resolution as u32,
+        skirt: symbios_tensor::SkirtConfig {
+            width: config.skirt_width,
+            bury_depth: config.skirt_bury_depth,
+        },
     };
 
     let road_meshes = symbios_tensor::generate_road_meshes(graph, heightmap, &mesh_config);
@@ -71,11 +96,21 @@ pub fn rebuild_roads(
         ));
     }
 
-    // Spawn ribbons mesh.
+    // Spawn ribbons mesh (flat asphalt).
     if let Some(mesh) = procedural_to_bevy(&road_meshes.ribbons) {
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
             MeshMaterial3d(road_handle.0.clone()),
+            Transform::from_translation(offset),
+            RoadMesh,
+        ));
+    }
+
+    // Spawn embankment skirts mesh (dirt material).
+    if let Some(mesh) = procedural_to_bevy(&road_meshes.skirts) {
+        commands.spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(skirt_mat),
             Transform::from_translation(offset),
             RoadMesh,
         ));

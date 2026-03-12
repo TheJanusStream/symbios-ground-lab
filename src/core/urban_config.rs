@@ -33,6 +33,10 @@ pub struct UrbanConfig {
     pub road_material: AsphaltConfig,
     /// Graph rationalization (RDP straightening + fillet smoothing).
     pub rationalize: RationalizeConfig,
+    /// Width of embankment skirts extending from road edges (world units).
+    pub skirt_width: f32,
+    /// How far below terrain surface the skirt buries itself.
+    pub skirt_bury_depth: f32,
 }
 
 impl Default for UrbanConfig {
@@ -61,6 +65,8 @@ impl Default for UrbanConfig {
             hub_segments: 8,
             road_material: AsphaltConfig::default(),
             rationalize: RationalizeConfig::default(),
+            skirt_width: 3.0,
+            skirt_bury_depth: 0.5,
         }
     }
 }

@@ -82,6 +82,20 @@ pub fn render_urban_ui(
                                 .text("Hub Segments"),
                         ).changed();
 
+                        // Embankment skirts
+                        changed |= slider(
+                            ui,
+                            &mut config.skirt_width,
+                            "Skirt Width",
+                            0.0..=10.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.skirt_bury_depth,
+                            "Skirt Bury Depth",
+                            0.0..=5.0,
+                        );
+
                         // Rationalization controls
                         egui::CollapsingHeader::new("Rationalization")
                             .default_open(false)
