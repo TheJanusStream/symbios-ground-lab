@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::time::Timer;
 use bevy_symbios_texture::asphalt::AsphaltConfig;
 use serde::{Deserialize, Serialize};
-use symbios_tensor::{BuildingLot, LotConfig, RoadGraph, TensorConfig};
+use symbios_tensor::{BuildingLot, LotConfig, RationalizeConfig, RoadGraph, TensorConfig};
 
 /// Configuration for tensor-field urban road generation.
 #[derive(Resource, Clone, Serialize, Deserialize)]
@@ -31,6 +31,8 @@ pub struct UrbanConfig {
     pub hub_segments: u32,
     /// Material configuration for road surface texture.
     pub road_material: AsphaltConfig,
+    /// Graph rationalization (RDP straightening + fillet smoothing).
+    pub rationalize: RationalizeConfig,
 }
 
 impl Default for UrbanConfig {
@@ -58,6 +60,7 @@ impl Default for UrbanConfig {
             road_resolution: 8.0,
             hub_segments: 8,
             road_material: AsphaltConfig::default(),
+            rationalize: RationalizeConfig::default(),
         }
     }
 }

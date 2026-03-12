@@ -147,7 +147,12 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
         // 2. Trace the initial network (Water-aware)
         match symbios_tensor::generate_roads(&hm, &t_cfg) {
             Ok(mut graph) => {
-                // 3. Extract Blocks and Lots
+                // 3. Rationalize the network (straighten & smooth)
+                if u_cfg.rationalize.enabled {
+                    symbios_tensor::rationalize_graph(&mut graph, &u_cfg.rationalize);
+                }
+
+                // 4. Extract Blocks and Lots
                 symbios_tensor::extract_blocks(&mut graph);
                 lots = symbios_tensor::extract_lots(&graph, &hm, absolute_water, &u_cfg.lot);
 

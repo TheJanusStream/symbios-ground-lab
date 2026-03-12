@@ -82,6 +82,39 @@ pub fn render_urban_ui(
                                 .text("Hub Segments"),
                         ).changed();
 
+                        // Rationalization controls
+                        egui::CollapsingHeader::new("Rationalization")
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                changed |= ui
+                                    .checkbox(&mut config.rationalize.enabled, "Enable Rationalization")
+                                    .changed();
+                                ui.add_enabled_ui(config.rationalize.enabled, |ui| {
+                                    changed |= slider(
+                                        ui,
+                                        &mut config.rationalize.rdp_tolerance,
+                                        "RDP Tolerance",
+                                        0.1..=10.0,
+                                    );
+                                    changed |= slider(
+                                        ui,
+                                        &mut config.rationalize.major_fillet_radius,
+                                        "Major Fillet Radius",
+                                        0.0..=50.0,
+                                    );
+                                    changed |= slider(
+                                        ui,
+                                        &mut config.rationalize.minor_fillet_radius,
+                                        "Minor Fillet Radius",
+                                        0.0..=30.0,
+                                    );
+                                    changed |= ui.add(
+                                        egui::Slider::new(&mut config.rationalize.fillet_segments, 1..=16)
+                                            .text("Fillet Segments"),
+                                    ).changed();
+                                });
+                            });
+
                         // Road material editor
                         egui::CollapsingHeader::new("Road Material")
                             .default_open(false)
