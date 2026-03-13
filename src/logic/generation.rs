@@ -149,7 +149,7 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
             Ok(mut graph) => {
                 // 3. Rationalize the network (straighten & smooth)
                 if u_cfg.rationalize.enabled {
-                    symbios_tensor::rationalize_graph(&mut graph, &u_cfg.rationalize);
+                    symbios_tensor::rationalize_graph(&mut graph, &hm, &u_cfg.rationalize);
                 }
 
                 // 4. Extract Blocks and Lots
@@ -160,8 +160,18 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
                 symbios_tensor::prune_unused_roads(&mut graph, &lots);
 
                 // 5. Carve terrain (only the surviving active roads will carve!)
-                let road_surface = symbios_tensor::carve_roads(&graph, &mut hm, u_cfg.road_width, u_cfg.road_blend_radius);
-                symbios_tensor::carve_lots(&lots, &mut hm, u_cfg.lot_blend_radius, Some(&road_surface));
+                let road_surface = symbios_tensor::carve_roads(
+                    &graph,
+                    &mut hm,
+                    u_cfg.road_width,
+                    u_cfg.road_blend_radius,
+                );
+                symbios_tensor::carve_lots(
+                    &lots,
+                    &mut hm,
+                    u_cfg.lot_blend_radius,
+                    Some(&road_surface),
+                );
 
                 road_graph = Some(graph);
             }

@@ -84,6 +84,7 @@ pub fn rebuild_roads(
             width: config.skirt_width,
             bury_depth: config.skirt_bury_depth,
         },
+        curb_radius: 1.0,
     };
 
     let road_meshes = symbios_tensor::generate_road_meshes(graph, heightmap, &mesh_config);
