@@ -24,12 +24,12 @@ fn fragment(
     let wave_z = cos(pos.z * 1.5 + t * 1.8) * 0.1 
                + sin(pos.x * 0.9 - t * 1.2) * 0.05;
 
-    // 2. Perturb the normal (default upward is Y in Bevy)
-    // The geometry is a flat box top, so base normal is (0, 1, 0)
+    // 2. Perturb the normal for the top face; side/bottom faces of the water
+    //    cuboid keep their geometric normal so lighting is correct at edges.
+    let geo_normal = normalize(in.world_normal);
+    let is_top_face = geo_normal.y > 0.5;
     let perturbed_normal = normalize(vec3<f32>(wave_x, 1.0, wave_z));
-    
-    // Feed the moving normal into the PBR lighting equation
-    pbr_input.N = perturbed_normal;
+    pbr_input.N = select(geo_normal, perturbed_normal, is_top_face);
 
     // 3. Apply standard Bevy lighting
     var out: FragmentOutput;

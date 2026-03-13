@@ -6,7 +6,7 @@
 //! and tagged with [`BuildingRoot`] for bulk despawn on regeneration.
 
 use crate::core::architecture_config::ArchitectureConfig;
-use crate::core::config::{CurrentHeightMap, DirtyFlags};
+use crate::core::config::{CurrentHeightMap, DirtyFlags, ErosionVizState};
 use crate::core::urban_config::CurrentBuildingLots;
 use bevy::prelude::*;
 use bevy_symbios_shape::{ShapeRegistry, SpawnShapeExt};
@@ -29,9 +29,18 @@ pub fn rebuild_buildings(
     mut _dirty: ResMut<DirtyFlags>, // Check specific arch dirty flag if we add one, or repurpose
     existing_q: Query<Entity, With<BuildingRoot>>,
     hm: Res<CurrentHeightMap>,
+    viz: Res<ErosionVizState>,
 ) {
     // Only rebuild when something actually changed.
     if !lots.is_changed() && !arch_config.is_changed() && !hm.is_changed() {
+        return;
+    }
+
+    // During erosion viz the heightmap is published every N frames for mesh
+    // updates. Rebuilding all buildings on each of those publishes would
+    // stall the main thread. Skip when the heightmap is the only trigger
+    // and the viz is actively running.
+    if viz.enabled && !lots.is_changed() && !arch_config.is_changed() {
         return;
     }
 

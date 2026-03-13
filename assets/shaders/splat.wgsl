@@ -117,15 +117,16 @@ fn decode_normal(encoded: vec3<f32>) -> vec3<f32> {
 /// tangent frame before blending, instead of being misinterpreted through the
 /// top-down mesh TBN.
 ///
-/// Axis TBN frames — right-handed (T×B = N) for all face orientations:
-///   X-projection (uv = world.zy): T = -sign_x·Z, B = +Y, N = sign_x·X
-///   Y-projection (uv = world.xz): T = +X,         B = -sign_y·Z, N = sign_y·Y
-///   Z-projection (uv = world.xy): T = sign_z·X,   B = +Y,        N = sign_z·Z
+/// Axis TBN frames — aligned with UV derivatives for correct perturbation:
+///   X-projection (uv = world.zy): T = sign_x·Z, B = +Y, N via cross
+///   Y-projection (uv = world.xz): T = +X,       B = sign_y·Z, N via cross
+///   Z-projection (uv = world.xy): T = sign_z·X,  B = +Y,      N = sign_z·Z
 ///
-/// The sign terms ensure the tangent or bitangent is flipped on back-facing
-/// surfaces so that T×B always aligns with the face normal, keeping the frame
-/// right-handed and preventing the "inside-out" normal-map artefact on faces
-/// whose surface normal points in a negative axis direction.
+/// The X and Y frames are left-handed (T×B = -N) so that the tangent and
+/// bitangent point in the same direction as the UV's U and V axes.  The
+/// outward (tz) component is negated implicitly in the reprojection formula
+/// to compensate, ensuring a flat tangent-space normal (0,0,1) still maps
+/// to the correct face normal.
 fn triplanar_normal_world(
     tex: texture_2d_array<f32>,
     samp: sampler,
@@ -144,12 +145,13 @@ fn triplanar_normal_world(
     let tn_z = decode_normal(textureSample(tex, samp, world_pos.xy * scale, layer).rgb);
 
     // Reproject each tangent-space normal into world space via the per-face TBN.
-    // Derivation: world = tx·T + ty·B + tz·N, with T/B chosen for right-handedness.
-    //   X: T=-sx·Z, B=+Y, N=sx·X → world = (tz·sx,  ty, -tx·sx)
-    //   Y: T=+X,    B=-sy·Z, N=sy·Y → world = (tx, tz·sy, -ty·sy)
-    //   Z: T=sz·X,  B=+Y,   N=sz·Z → world = (tx·sz,  ty,  tz·sz)
-    let wn_x = vec3<f32>(tn_x.z * sign_x, tn_x.y, -tn_x.x * sign_x);
-    let wn_y = vec3<f32>(tn_y.x, tn_y.z * sign_y, -tn_y.y * sign_y);
+    // T/B are aligned with the UV sampling directions so that tangent-space
+    // perturbations (tx, ty) map to the correct world-space directions.
+    //   X: T=sx·Z, B=+Y  (left-handed, tz negated) → world = (tz·sx,  ty,  tx·sx)
+    //   Y: T=+X,   B=sy·Z (left-handed, tz negated) → world = (tx,    tz·sy, ty·sy)
+    //   Z: T=sz·X, B=+Y   (right-handed)            → world = (tx·sz, ty,    tz·sz)
+    let wn_x = vec3<f32>(tn_x.z * sign_x, tn_x.y, tn_x.x * sign_x);
+    let wn_y = vec3<f32>(tn_y.x, tn_y.z * sign_y, tn_y.y * sign_y);
     let wn_z = vec3<f32>(tn_z.x * sign_z, tn_z.y, tn_z.z * sign_z);
 
     return normalize(wn_x * weights.x + wn_y * weights.y + wn_z * weights.z);

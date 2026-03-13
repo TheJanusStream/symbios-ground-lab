@@ -10,8 +10,10 @@ use rand_pcg::Pcg64Mcg;
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, TerrainConfig, VizDroplet,
 };
+use crate::core::material_config::MaterialState;
 use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 use crate::logic::generation::generate_base_heightmap;
+use symbios_ground::ThermalErosion;
 
 /// Kick off the erosion visualisation.
 ///
@@ -57,6 +59,7 @@ pub fn poll_viz_init(
     mut current_rg: ResMut<CurrentRoadGraph>,
     mut current_lots: ResMut<CurrentBuildingLots>,
     mut dirty_mesh: ResMut<DirtyMesh>,
+    mut mat_state: ResMut<MaterialState>,
 ) {
     // Drain abandoned tasks: retain only those not yet complete.
     viz.abandoned_init_tasks
@@ -70,6 +73,11 @@ pub fn poll_viz_init(
         current_rg.0 = rg;
         current_lots.0 = lots;
         dirty_mesh.0 = true;
+        // Trigger a splat weight-map regeneration for the un-eroded base
+        // heightmap. This must be set explicitly because viz.enabled is about
+        // to become true, which causes detect_material_dirty to suppress
+        // heightmap-triggered splat updates for the rest of the viz.
+        mat_state.splat_dirty = true;
         viz.heightmap = Some(hm);
         viz.init_task = None;
         viz.enabled = true;
@@ -100,15 +108,34 @@ pub fn step_erosion_viz(
     let cfg = viz.config.clone();
     let steps = viz.steps_per_frame;
     let drops_per_frame = viz.drops_per_frame;
+    let water_level = cfg.water_level * cfg.height_scale;
 
     // Spawn new droplets (up to drops_per_frame, respecting total budget).
+    // Skip submerged spawn points to match HydraulicErosion behaviour.
     let remaining = viz
         .total
         .saturating_sub(viz.completed + viz.active.len() as u32);
     let to_spawn = drops_per_frame.min(remaining);
-    for _ in 0..to_spawn {
+    let mut spawned = 0u32;
+    let mut attempts = 0u32;
+    while spawned < to_spawn && attempts < to_spawn * 4 {
+        attempts += 1;
         let px: f32 = viz.rng.random::<f32>() * (w - 1) as f32;
         let pz: f32 = viz.rng.random::<f32>() * (h - 1) as f32;
+        // Check height at spawn point; skip if submerged.
+        let ix = px.floor() as usize;
+        let iz = pz.floor() as usize;
+        if ix + 1 < w && iz + 1 < h {
+            let fx = px - ix as f32;
+            let fz = pz - iz as f32;
+            let spawn_h = hm.get(ix, iz) * (1.0 - fx) * (1.0 - fz)
+                + hm.get(ix + 1, iz) * fx * (1.0 - fz)
+                + hm.get(ix, iz + 1) * (1.0 - fx) * fz
+                + hm.get(ix + 1, iz + 1) * fx * fz;
+            if spawn_h < water_level {
+                continue;
+            }
+        }
         viz.active.push(VizDroplet {
             px,
             pz,
@@ -120,6 +147,7 @@ pub fn step_erosion_viz(
             steps_left: 64,
             trail: VecDeque::from([Vec2::new(px, pz)]),
         });
+        spawned += 1;
     }
 
     // Step every active droplet.
@@ -274,6 +302,22 @@ pub fn step_erosion_viz(
     }
 
     if viz.completed >= viz.total && viz.active.is_empty() {
+        // Apply thermal relaxation pass to match the background generator.
+        // This runs synchronously on the main thread but is fast (~10 ms for
+        // typical grid sizes) and only happens once at the end of the viz.
+        if let Some(ref mut hm) = viz.heightmap.as_mut().filter(|_| cfg.thermal_enabled) {
+            let absolute_water = cfg.water_level * cfg.height_scale;
+            ThermalErosion::new()
+                .with_iterations(cfg.thermal_iterations)
+                .with_talus_angle(cfg.thermal_talus_angle)
+                .with_water_level(absolute_water)
+                .with_underwater_talus_angle(0.01)
+                .erode(hm);
+            // Publish the thermally-smoothed result.
+            current_hm.0 = Some(hm.clone());
+            dirty_mesh.0 = true;
+        }
+
         viz.enabled = false;
         dirty.terrain = false;
     }

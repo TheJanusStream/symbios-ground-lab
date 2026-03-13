@@ -8,7 +8,7 @@
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
-use crate::core::config::CurrentHeightMap;
+use crate::core::config::{CurrentHeightMap, ErosionVizState};
 use crate::core::urban_config::{CurrentRoadGraph, UrbanConfig};
 use crate::visuals::road_materials::RoadMaterialHandle;
 
@@ -32,8 +32,15 @@ pub fn rebuild_roads(
     existing_q: Query<Entity, With<RoadMesh>>,
     handle_q: Query<&RoadMaterialHandle>,
     skirt_handle: Option<Res<SkirtMaterialHandle>>,
+    viz: Res<ErosionVizState>,
 ) {
     if !current_rg.is_changed() && !config.is_changed() && !hm.is_changed() {
+        return;
+    }
+
+    // Skip heightmap-only rebuilds during erosion viz to avoid main-thread
+    // stalls from regenerating the full road graph every N frames.
+    if viz.enabled && !current_rg.is_changed() && !config.is_changed() {
         return;
     }
 
