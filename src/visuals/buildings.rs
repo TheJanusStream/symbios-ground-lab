@@ -31,7 +31,7 @@ pub fn rebuild_buildings(
     hm: Res<CurrentHeightMap>,
 ) {
     // Only rebuild when something actually changed.
-    if !lots.is_changed() && !arch_config.is_changed() {
+    if !lots.is_changed() && !arch_config.is_changed() && !hm.is_changed() {
         return;
     }
 

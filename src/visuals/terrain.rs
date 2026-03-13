@@ -107,7 +107,7 @@ pub fn spawn_terrain(
     });
 
     let world_extent = (config.grid_size - 1) as f32 * config.cell_scale;
-    let wl = config.water_level * config.height_scale;
+    let wl = (config.water_level * config.height_scale).max(0.001);
 
     commands.spawn((
         Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
@@ -153,7 +153,7 @@ pub fn rebuild_terrain(
 
     // Water volume
     if let Ok(mut transform) = water_q.single_mut() {
-        let wl = config.water_level * config.height_scale;
+        let wl = (config.water_level * config.height_scale).max(0.001);
         transform.translation.y = wl / 2.0;
         transform.scale.y = wl;
         transform.scale.x = (config.grid_size - 1) as f32 * config.cell_scale;

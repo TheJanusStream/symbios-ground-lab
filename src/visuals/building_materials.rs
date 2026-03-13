@@ -167,13 +167,14 @@ pub fn regenerate_building_textures(
     }
     mat_state.textures_dirty = false;
 
-    if !config.enabled {
-        return;
-    }
-
-    // Cancel any in-flight tasks from a previous regeneration.
+    // Cancel any in-flight tasks from a previous regeneration, even if
+    // architecture is disabled — otherwise orphaned tasks waste CPU.
     for e in &pending_q {
         commands.entity(e).despawn();
+    }
+
+    if !config.enabled {
+        return;
     }
 
     // Helper: update base material properties immediately and spawn an async

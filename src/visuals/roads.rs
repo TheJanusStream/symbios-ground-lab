@@ -33,7 +33,7 @@ pub fn rebuild_roads(
     handle_q: Query<&RoadMaterialHandle>,
     skirt_handle: Option<Res<SkirtMaterialHandle>>,
 ) {
-    if !current_rg.is_changed() && !config.is_changed() {
+    if !current_rg.is_changed() && !config.is_changed() && !hm.is_changed() {
         return;
     }
 

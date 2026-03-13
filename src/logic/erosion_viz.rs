@@ -10,7 +10,7 @@ use rand_pcg::Pcg64Mcg;
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, TerrainConfig, VizDroplet,
 };
-use crate::core::urban_config::UrbanConfig;
+use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, UrbanConfig};
 use crate::logic::generation::generate_base_heightmap;
 
 /// Kick off the erosion visualisation.
@@ -26,8 +26,7 @@ pub fn start_erosion_viz(config: &TerrainConfig, u_cfg: &UrbanConfig, state: &mu
     let u_cfg = u_cfg.clone();
     let pool = AsyncComputeTaskPool::get();
     let t = pool.spawn(async move {
-        let (hm, _rg, _lots) = generate_base_heightmap(&cfg_no_erosion, &u_cfg);
-        hm
+        generate_base_heightmap(&cfg_no_erosion, &u_cfg)
     });
     state.init_task = Some(t);
 
@@ -55,6 +54,8 @@ pub fn start_erosion_viz(config: &TerrainConfig, u_cfg: &UrbanConfig, state: &mu
 pub fn poll_viz_init(
     mut viz: ResMut<ErosionVizState>,
     mut current_hm: ResMut<CurrentHeightMap>,
+    mut current_rg: ResMut<CurrentRoadGraph>,
+    mut current_lots: ResMut<CurrentBuildingLots>,
     mut dirty_mesh: ResMut<DirtyMesh>,
 ) {
     // Drain abandoned tasks: retain only those not yet complete.
@@ -64,8 +65,10 @@ pub fn poll_viz_init(
     let Some(ref mut t) = viz.init_task else {
         return;
     };
-    if let Some(hm) = future::block_on(future::poll_once(t)) {
+    if let Some((hm, rg, lots)) = future::block_on(future::poll_once(t)) {
         current_hm.0 = Some(hm.clone());
+        current_rg.0 = rg;
+        current_lots.0 = lots;
         dirty_mesh.0 = true;
         viz.heightmap = Some(hm);
         viz.init_task = None;

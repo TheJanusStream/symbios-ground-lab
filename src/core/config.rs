@@ -170,15 +170,16 @@ pub struct ExportTask(pub Option<bevy::tasks::Task<Result<String, String>>>);
 pub struct ErosionVizState {
     /// Whether the step-by-step visualisation is active.
     pub enabled: bool,
-    /// In-flight async task that generates the base (uneroded) heightmap before
-    /// the visualisation can start.  `None` once init completes or is cancelled.
-    pub init_task: Option<Task<HeightMap>>,
+    /// In-flight async task that generates the base (uneroded) heightmap (plus
+    /// road graph and building lots) before the visualisation can start.
+    /// `None` once init completes or is cancelled.
+    pub init_task: Option<Task<GenerationOutput>>,
     /// Tasks that were detached by "Stop Viz" while still running.  Dropping a
     /// `Task` handle does NOT cancel the underlying thread; the CPU work keeps
     /// running until the pool slot is released naturally.  Keeping the handles
     /// here lets `poll_viz_init` drain them to completion before a new
     /// visualisation is allowed to start, capping concurrent init tasks at one.
-    pub abandoned_init_tasks: Vec<Task<HeightMap>>,
+    pub abandoned_init_tasks: Vec<Task<GenerationOutput>>,
     /// Working copy of the heightmap being eroded in real-time.
     pub heightmap: Option<HeightMap>,
     /// Deterministic RNG for spawning droplets.

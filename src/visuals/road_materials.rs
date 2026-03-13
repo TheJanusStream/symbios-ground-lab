@@ -64,16 +64,19 @@ pub fn regenerate_road_textures(
     if !mat_state.textures_dirty {
         return;
     }
-    mat_state.textures_dirty = false;
 
-    if !config.enabled || !config.render_roads {
-        return;
-    }
-
-    // Cancel any in-flight tasks.
+    // Cancel any in-flight tasks even if roads are disabled, to avoid
+    // orphaned async work.
     for e in &pending_q {
         commands.entity(e).despawn();
     }
+
+    if !config.enabled || !config.render_roads {
+        // Keep textures_dirty so the pending update is applied when
+        // roads are re-enabled.
+        return;
+    }
+    mat_state.textures_dirty = false;
 
     let Ok(road_handle) = handle_q.single() else {
         return;
