@@ -84,13 +84,32 @@ pub fn render_architecture_ui(
                     };
                 }
 
-                texture_changed |= mat_section!(ui, "Brick (Main Facade)", |ui: &mut egui::Ui, id| brick_config_editor(ui, &mut cfg.brick, id));
-                texture_changed |= mat_section!(ui, "Stucco (Upper Facade)", |ui: &mut egui::Ui, id| stucco_config_editor(ui, &mut cfg.stucco, id));
-                texture_changed |= mat_section!(ui, "Concrete (Trim/Frames)", |ui: &mut egui::Ui, id| concrete_config_editor(ui, &mut cfg.concrete, id));
-                texture_changed |= mat_section!(ui, "Shingle (Roof)", |ui: &mut egui::Ui, id| shingle_config_editor(ui, &mut cfg.shingle, id));
-                texture_changed |= mat_section!(ui, "Wood (Doors/Decks)", |ui: &mut egui::Ui, id| plank_config_editor(ui, &mut cfg.wood, id));
-                texture_changed |= mat_section!(ui, "Glass (Windows)", |ui: &mut egui::Ui, id| window_config_editor(ui, &mut cfg.glass, id));
-                texture_changed |= mat_section!(ui, "Metal (Fascia/Gutters)", |ui: &mut egui::Ui, id| metal_config_editor(ui, &mut cfg.metal, id));
+                texture_changed |=
+                    mat_section!(ui, "Brick (Main Facade)", |ui: &mut egui::Ui, id| {
+                        brick_config_editor(ui, &mut cfg.brick, id)
+                    });
+                texture_changed |=
+                    mat_section!(ui, "Stucco (Upper Facade)", |ui: &mut egui::Ui, id| {
+                        stucco_config_editor(ui, &mut cfg.stucco, id)
+                    });
+                texture_changed |=
+                    mat_section!(ui, "Concrete (Trim/Frames)", |ui: &mut egui::Ui, id| {
+                        concrete_config_editor(ui, &mut cfg.concrete, id)
+                    });
+                texture_changed |= mat_section!(ui, "Shingle (Roof)", |ui: &mut egui::Ui, id| {
+                    shingle_config_editor(ui, &mut cfg.shingle, id)
+                });
+                texture_changed |=
+                    mat_section!(ui, "Wood (Doors/Decks)", |ui: &mut egui::Ui, id| {
+                        plank_config_editor(ui, &mut cfg.wood, id)
+                    });
+                texture_changed |= mat_section!(ui, "Glass (Windows)", |ui: &mut egui::Ui, id| {
+                    window_config_editor(ui, &mut cfg.glass, id)
+                });
+                texture_changed |=
+                    mat_section!(ui, "Metal (Fascia/Gutters)", |ui: &mut egui::Ui, id| {
+                        metal_config_editor(ui, &mut cfg.metal, id)
+                    });
             });
     }
 

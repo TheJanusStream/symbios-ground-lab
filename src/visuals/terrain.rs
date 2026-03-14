@@ -1,3 +1,11 @@
+//! Terrain mesh and water volume management.
+//!
+//! [`spawn_terrain`] creates the initial placeholder plane with a
+//! [`SplatTerrainMaterial`] and a translucent [`WaterVolume`] cuboid at
+//! startup.  [`rebuild_terrain`] replaces the mesh whenever a new heightmap
+//! is published to [`CurrentHeightMap`], generating Mikktspace tangents for
+//! normal-map blending (skipped during active erosion visualisation).
+
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,

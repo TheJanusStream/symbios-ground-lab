@@ -1,3 +1,11 @@
+//! Main "Terraformer" egui window.
+//!
+//! Draws collapsible sections for Grid/World settings, generator algorithm
+//! selection, hydraulic and thermal erosion parameters, status indicators,
+//! action buttons (Regenerate, Visualise Erosion, Stop Viz), and the Export
+//! panel.  A 400 ms debounce prevents rapid slider drags from saturating the
+//! terrain generation pool.
+
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
@@ -394,7 +402,7 @@ pub fn render_ui(
                         ExportStatus::Exporting => {
                             ui.horizontal(|ui| {
                                 ui.spinner();
-                                ui.label("Exporting OBJ…");
+                                ui.label("Exporting…");
                             });
                         }
                         ExportStatus::Done(f) => {

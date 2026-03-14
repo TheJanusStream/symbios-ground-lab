@@ -7,12 +7,11 @@
 
 use bevy::prelude::*;
 use bevy::time::Timer;
-use serde::{Deserialize, Serialize};
 use bevy_symbios_texture::{
-    brick::BrickConfig, stucco::StuccoConfig, concrete::ConcreteConfig,
-    shingle::ShingleConfig, plank::PlankConfig, window::WindowConfig,
-    metal::MetalConfig,
+    brick::BrickConfig, concrete::ConcreteConfig, metal::MetalConfig, plank::PlankConfig,
+    shingle::ShingleConfig, stucco::StuccoConfig, window::WindowConfig,
 };
+use serde::{Deserialize, Serialize};
 
 /// Runtime state for debounced building-material texture regeneration.
 ///
@@ -130,7 +129,6 @@ GaragePanel --> Extrude(0.1) Mat("Metal") I("GDoor")
 BrickWall --> Extrude(0.2) Mat("Brick") I("Wall")
 StuccoWall --> Extrude(0.2) Mat("Stucco") I("Wall")
             "#.trim().to_string(),
-            
             brick: BrickConfig { aspect_ratio: 3.0, color_brick: [0.45, 0.22, 0.15], scale: 8.0, ..default() },
             stucco: StuccoConfig { roughness: 0.35, color_base: [0.87, 0.83, 0.77], ..default() },
             concrete: ConcreteConfig { formwork_lines: 3.0, formwork_depth: 0.1, ..default() },

@@ -136,12 +136,7 @@ pub fn draw_lot_gizmos(
         let hd = lot.depth * 0.5;
 
         // Local offsets (street_dir = cos/sin, inward_dir = -sin/cos)
-        let corners = [
-            (-hw, -hd),
-            (hw, -hd),
-            (hw, hd),
-            (-hw, hd),
-        ];
+        let corners = [(-hw, -hd), (hw, -hd), (hw, hd), (-hw, hd)];
 
         let world_corners: Vec<Vec3> = corners
             .iter()

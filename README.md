@@ -43,7 +43,8 @@ Tensor-field-based road network generation with water-aware tracing:
 - **Building lots** subdivided from blocks with configurable area limits, setbacks, and minimum dimensions.
 - **Synaptic pruning** removes roads that serve no lots, keeping the network efficient.
 - **Terrain carving** flattens the heightmap under roads and lots with smooth blend radii before erosion runs.
-- **3D road meshes** rendered as intersection hub polygons and spline-sampled ribbons with procedural asphalt textures.
+- **Graph rationalisation** straightens edges via Ramer–Douglas–Peucker simplification and smooths intersections with configurable fillet arcs.
+- **3D road meshes** rendered as intersection hub polygons, spline-sampled ribbons with procedural asphalt textures, and embankment skirts with a dirt material.
 - **Debug gizmos** for road edges (yellow=major, cyan=minor), block outlines (green), block centroids (magenta), and lot footprints (orange).
 
 ### Procedural Architecture
@@ -107,7 +108,8 @@ Then serve `index.html` and the generated `out/` directory from a local HTTP ser
 
 ```
 src/
-  main.rs                — App setup: plugins, resources, system schedule
+  main.rs                — App setup: plugins (incl. BevySymbiosShapePlugin,
+                           SymbiosTexturePlugin), resources, system schedule
   lib.rs                 — Re-exports the four top-level modules
   core/
     config.rs            — TerrainConfig, DirtyFlags, ErosionVizState,

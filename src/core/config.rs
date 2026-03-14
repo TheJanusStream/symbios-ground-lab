@@ -1,3 +1,11 @@
+//! Core terrain configuration, dirty flags, and erosion-visualisation state.
+//!
+//! [`TerrainConfig`] is the single source of truth for all user-facing terrain
+//! generation parameters.  Supporting resources ([`DirtyFlags`], [`DirtyMesh`],
+//! [`TerrainDebounce`], [`CurrentHeightMap`], [`GenerationTask`], [`ExportStatus`],
+//! [`ExportTask`]) orchestrate the async generation / export lifecycle.
+//! [`ErosionVizState`] drives the frame-by-frame droplet visualisation.
+
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
@@ -157,7 +165,7 @@ pub enum ExportStatus {
     Error(String),
 }
 
-/// Async OBJ export task in-flight (mirrors the GenerationTask pattern).
+/// Async export task in-flight (PNG, OBJ, or JSON; mirrors the GenerationTask pattern).
 #[derive(Resource, Default)]
 pub struct ExportTask(pub Option<bevy::tasks::Task<Result<String, String>>>);
 

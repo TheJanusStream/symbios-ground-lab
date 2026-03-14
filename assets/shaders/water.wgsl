@@ -1,3 +1,13 @@
+// Fragment shader for the animated water surface.
+//
+// Extends the base StandardMaterial with sum-of-sines wave perturbation
+// applied to the surface normal.  Only the top face of the water cuboid is
+// perturbed; side and bottom faces keep their geometric normal so lighting
+// at the water volume edges remains correct.
+//
+// The wave animation is driven entirely by Bevy's `globals.time` uniform —
+// no additional bindings or uniforms are required.
+
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},

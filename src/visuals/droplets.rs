@@ -1,3 +1,8 @@
+//! Gizmo rendering for active erosion-visualisation droplets.
+//!
+//! Each droplet is drawn as a bright cyan sphere with a fading trail of smaller
+//! spheres tracing its recent path across the terrain.
+
 use bevy::prelude::*;
 
 use crate::core::config::ErosionVizState;

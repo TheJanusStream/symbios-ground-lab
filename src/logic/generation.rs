@@ -1,3 +1,12 @@
+//! Async terrain generation pipeline.
+//!
+//! [`start_generation`] spawns a background task on Bevy's
+//! [`AsyncComputeTaskPool`] that runs the selected terrain algorithm, optional
+//! urban road generation and carving, then hydraulic and thermal erosion.
+//! [`poll_generation`] harvests the result and publishes it to
+//! [`CurrentHeightMap`].  [`generate_base_heightmap`] is the pre-erosion entry
+//! point used by the erosion visualisation.
+
 use crate::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, GenerationTask, GeneratorKind, TerrainConfig,
 };

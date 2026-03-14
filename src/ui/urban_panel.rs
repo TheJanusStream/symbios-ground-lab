@@ -11,7 +11,9 @@ use bevy_egui::{EguiContexts, egui};
 use bevy_symbios_texture::ui::asphalt_config_editor;
 
 use crate::core::config::{DirtyFlags, TerrainDebounce};
-use crate::core::urban_config::{CurrentBuildingLots, CurrentRoadGraph, RoadMaterialState, UrbanConfig};
+use crate::core::urban_config::{
+    CurrentBuildingLots, CurrentRoadGraph, RoadMaterialState, UrbanConfig,
+};
 
 /// Render the "Urban Planner" egui window.
 pub fn render_urban_ui(
@@ -45,7 +47,8 @@ pub fn render_urban_ui(
                     .show(ui, |ui| {
                         ui.checkbox(&mut config.show_gizmos, "Show Road Gizmos");
                         ui.checkbox(&mut config.render_roads, "Render 3D Roads");
-                        changed |= slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=15.0);
+                        changed |=
+                            slider(ui, &mut config.tensor.step_size, "Step Size", 0.5..=15.0);
                         changed |= slider(
                             ui,
                             &mut config.tensor.major_road_dist,
@@ -77,18 +80,15 @@ pub fn render_urban_ui(
                             "Spline Resolution",
                             1.0..=32.0,
                         );
-                        changed |= ui.add(
-                            egui::Slider::new(&mut config.hub_segments, 3..=32)
-                                .text("Hub Segments"),
-                        ).changed();
+                        changed |= ui
+                            .add(
+                                egui::Slider::new(&mut config.hub_segments, 3..=32)
+                                    .text("Hub Segments"),
+                            )
+                            .changed();
 
                         // Embankment skirts
-                        changed |= slider(
-                            ui,
-                            &mut config.skirt_width,
-                            "Skirt Width",
-                            0.0..=10.0,
-                        );
+                        changed |= slider(ui, &mut config.skirt_width, "Skirt Width", 0.0..=10.0);
                         changed |= slider(
                             ui,
                             &mut config.skirt_bury_depth,
@@ -101,7 +101,10 @@ pub fn render_urban_ui(
                             .default_open(false)
                             .show(ui, |ui| {
                                 changed |= ui
-                                    .checkbox(&mut config.rationalize.enabled, "Enable Rationalization")
+                                    .checkbox(
+                                        &mut config.rationalize.enabled,
+                                        "Enable Rationalization",
+                                    )
                                     .changed();
                                 ui.add_enabled_ui(config.rationalize.enabled, |ui| {
                                     changed |= slider(
@@ -122,10 +125,15 @@ pub fn render_urban_ui(
                                         "Minor Fillet Radius",
                                         0.0..=30.0,
                                     );
-                                    changed |= ui.add(
-                                        egui::Slider::new(&mut config.rationalize.fillet_segments, 1..=16)
+                                    changed |= ui
+                                        .add(
+                                            egui::Slider::new(
+                                                &mut config.rationalize.fillet_segments,
+                                                1..=16,
+                                            )
                                             .text("Fillet Segments"),
-                                    ).changed();
+                                        )
+                                        .changed();
                                 });
                             });
 
@@ -134,7 +142,8 @@ pub fn render_urban_ui(
                             .default_open(false)
                             .show(ui, |ui| {
                                 let id = egui::Id::new(("urban", "road_material"));
-                                let (_wb, regen) = asphalt_config_editor(ui, &mut config.road_material, id);
+                                let (_wb, regen) =
+                                    asphalt_config_editor(ui, &mut config.road_material, id);
                                 texture_changed |= regen;
                             });
                     });

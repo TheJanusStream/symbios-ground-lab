@@ -1,3 +1,12 @@
+//! Real-time erosion visualisation.
+//!
+//! [`start_erosion_viz`] generates the base (uneroded) heightmap on a
+//! background thread.  [`poll_viz_init`] picks up the result and enables the
+//! visualisation.  [`step_erosion_viz`] runs every frame, spawning and stepping
+//! droplets and publishing periodic heightmap snapshots so the terrain mesh
+//! updates while the simulation runs.  On completion a thermal relaxation pass
+//! is applied to match the background generator's output.
+
 use std::collections::VecDeque;
 
 use bevy::prelude::*;
@@ -27,9 +36,7 @@ pub fn start_erosion_viz(config: &TerrainConfig, u_cfg: &UrbanConfig, state: &mu
 
     let u_cfg = u_cfg.clone();
     let pool = AsyncComputeTaskPool::get();
-    let t = pool.spawn(async move {
-        generate_base_heightmap(&cfg_no_erosion, &u_cfg)
-    });
+    let t = pool.spawn(async move { generate_base_heightmap(&cfg_no_erosion, &u_cfg) });
     state.init_task = Some(t);
 
     // Pre-populate everything except the heightmap so the step system is ready

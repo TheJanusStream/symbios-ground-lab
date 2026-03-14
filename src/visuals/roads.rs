@@ -53,7 +53,9 @@ pub fn rebuild_roads(
         return;
     }
 
-    let Some(ref graph) = current_rg.0 else { return };
+    let Some(ref graph) = current_rg.0 else {
+        return;
+    };
     let Some(ref heightmap) = hm.0 else { return };
     let Ok(road_handle) = handle_q.single() else {
         return;

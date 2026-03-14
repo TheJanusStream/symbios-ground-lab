@@ -1,3 +1,8 @@
+//! Camera and lighting setup.
+//!
+//! [`setup_scene`] runs once at [`Startup`] and spawns a warm directional sun,
+//! ambient fill light, and a [`PanOrbitCamera`] centred on the world origin.
+
 use bevy::color::palettes::css::WHITE;
 use bevy::prelude::*;
 use bevy_panorbit_camera::PanOrbitCamera;

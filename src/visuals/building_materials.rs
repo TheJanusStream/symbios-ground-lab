@@ -19,6 +19,9 @@ pub struct PendingBuildingTexture {
     pub material_handle: Handle<StandardMaterial>,
 }
 
+/// Registers a [`StandardMaterial`] and spawns a [`PendingTexture`] task for
+/// each building material key (Brick, Stucco, Concrete, Shingle, Wood, Metal,
+/// Glass, Pavers).  Runs once at [`Startup`].
 pub fn setup_building_materials(
     mut commands: Commands,
     mut registry: ResMut<ShapeRegistry>,
@@ -180,11 +183,11 @@ pub fn regenerate_building_textures(
     // Helper: update base material properties immediately and spawn an async
     // texture task for the given registry key.
     let respawn = |commands: &mut Commands,
-                       materials: &mut Assets<StandardMaterial>,
-                       registry: &ShapeRegistry,
-                       key: &str,
-                       base_mat: StandardMaterial,
-                       pending: PendingTexture| {
+                   materials: &mut Assets<StandardMaterial>,
+                   registry: &ShapeRegistry,
+                   key: &str,
+                   base_mat: StandardMaterial,
+                   pending: PendingTexture| {
         if let Some(handle) = registry.resolve_material(Some(key)) {
             if let Some(mat) = materials.get_mut(&handle) {
                 mat.base_color = base_mat.base_color;
@@ -203,46 +206,100 @@ pub fn regenerate_building_textures(
     };
 
     respawn(
-        &mut commands, &mut materials, &registry, "Brick",
-        StandardMaterial { base_color: Color::srgb_from_array(config.brick.color_brick), perceptual_roughness: 0.9, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Brick",
+        StandardMaterial {
+            base_color: Color::srgb_from_array(config.brick.color_brick),
+            perceptual_roughness: 0.9,
+            ..default()
+        },
         PendingTexture::brick(config.brick.clone(), 1024, 1024),
     );
     respawn(
-        &mut commands, &mut materials, &registry, "Stucco",
-        StandardMaterial { base_color: Color::srgb_from_array(config.stucco.color_base), perceptual_roughness: 0.8, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Stucco",
+        StandardMaterial {
+            base_color: Color::srgb_from_array(config.stucco.color_base),
+            perceptual_roughness: 0.8,
+            ..default()
+        },
         PendingTexture::stucco(config.stucco.clone(), 1024, 1024),
     );
     respawn(
-        &mut commands, &mut materials, &registry, "Concrete",
-        StandardMaterial { base_color: Color::srgb(0.6, 0.6, 0.6), perceptual_roughness: 0.85, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Concrete",
+        StandardMaterial {
+            base_color: Color::srgb(0.6, 0.6, 0.6),
+            perceptual_roughness: 0.85,
+            ..default()
+        },
         PendingTexture::concrete(config.concrete.clone(), 512, 512),
     );
     respawn(
-        &mut commands, &mut materials, &registry, "Shingle",
-        StandardMaterial { base_color: Color::srgb_from_array(config.shingle.color_tile), perceptual_roughness: 0.8, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Shingle",
+        StandardMaterial {
+            base_color: Color::srgb_from_array(config.shingle.color_tile),
+            perceptual_roughness: 0.8,
+            ..default()
+        },
         PendingTexture::shingle(config.shingle.clone(), 1024, 1024),
     );
     respawn(
-        &mut commands, &mut materials, &registry, "Wood",
-        StandardMaterial { base_color: Color::srgb_from_array(config.wood.color_wood_light), perceptual_roughness: 0.6, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Wood",
+        StandardMaterial {
+            base_color: Color::srgb_from_array(config.wood.color_wood_light),
+            perceptual_roughness: 0.6,
+            ..default()
+        },
         PendingTexture::plank(config.wood.clone(), 512, 512),
     );
     respawn(
-        &mut commands, &mut materials, &registry, "Metal",
-        StandardMaterial { base_color: Color::srgb_from_array(config.metal.color_metal), metallic: 0.85, perceptual_roughness: 0.3, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Metal",
+        StandardMaterial {
+            base_color: Color::srgb_from_array(config.metal.color_metal),
+            metallic: 0.85,
+            perceptual_roughness: 0.3,
+            ..default()
+        },
         PendingTexture::metal(config.metal.clone(), 512, 512),
     );
     respawn(
-        &mut commands, &mut materials, &registry, "Glass",
-        StandardMaterial { base_color: Color::srgba(0.1, 0.2, 0.3, 0.3), metallic: 0.9, perceptual_roughness: 0.05, alpha_mode: AlphaMode::Blend, ..default() },
+        &mut commands,
+        &mut materials,
+        &registry,
+        "Glass",
+        StandardMaterial {
+            base_color: Color::srgba(0.1, 0.2, 0.3, 0.3),
+            metallic: 0.9,
+            perceptual_roughness: 0.05,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        },
         PendingTexture::window(config.glass.clone(), 512, 512),
     );
 }
 
-// System to apply textures when ready
 use bevy_symbios_texture::async_gen::TextureReady;
 use bevy_symbios_texture::concrete::ConcreteConfig;
 
+/// Wires completed albedo, normal, and roughness maps into the corresponding
+/// [`StandardMaterial`] when a [`PendingBuildingTexture`] entity gains a
+/// [`TextureReady`] component, then despawns the temporary entity.
 pub fn apply_building_textures(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,

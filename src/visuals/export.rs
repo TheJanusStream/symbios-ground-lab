@@ -1,3 +1,10 @@
+//! PNG heightmap, OBJ mesh, and JSON config export (native + WASM).
+//!
+//! Each export format is spawned on the [`AsyncComputeTaskPool`] so the main
+//! thread is never blocked.  On native builds files are written to `exports/`;
+//! on WASM a browser download is triggered via a synthetic anchor click.
+//! [`poll_export_task`] drains the in-flight task and updates [`ExportStatus`].
+
 use bevy::prelude::*;
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::tasks::futures_lite::future;

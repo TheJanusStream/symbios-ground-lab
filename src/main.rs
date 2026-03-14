@@ -4,7 +4,9 @@ use bevy_panorbit_camera::PanOrbitCameraPlugin;
 use bevy_symbios_shape::BevySymbiosShapePlugin;
 use bevy_symbios_texture::SymbiosTexturePlugin;
 
-use symbios_ground_lab::core::architecture_config::{ArchitectureConfig, ArchitectureMaterialState};
+use symbios_ground_lab::core::architecture_config::{
+    ArchitectureConfig, ArchitectureMaterialState,
+};
 use symbios_ground_lab::core::config::{
     CurrentHeightMap, DirtyFlags, DirtyMesh, ErosionVizState, ExportStatus, ExportTask,
     GenerationTask, TerrainConfig, TerrainDebounce,
