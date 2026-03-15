@@ -8,14 +8,21 @@ use bevy::prelude::*;
 use bevy::time::Timer;
 use bevy_symbios_texture::asphalt::AsphaltConfig;
 use serde::{Deserialize, Serialize};
-use symbios_tensor::{BuildingLot, LotConfig, RationalizeConfig, RoadGraph, TensorConfig};
+use symbios_tensor::{
+    BuildingLot, LotConfig, RationalizeConfig, RoadGraph, RoadMeshConfig, SkirtConfig, TensorConfig,
+};
 
 /// Configuration for tensor-field urban road generation.
 #[derive(Resource, Clone, Serialize, Deserialize)]
 pub struct UrbanConfig {
     pub enabled: bool,
     pub tensor: TensorConfig,
-    pub road_width: f32,
+    /// Half-width of major roads (world units).
+    pub major_half_width: f32,
+    /// Half-width of minor roads (world units).
+    pub minor_half_width: f32,
+    /// Extra radius added to intersection hubs beyond the road half-width.
+    pub curb_radius: f32,
     pub lot: LotConfig,
     pub lot_blend_radius: f32,
     pub road_blend_radius: f32,
@@ -44,7 +51,9 @@ impl Default for UrbanConfig {
         Self {
             enabled: false,
             tensor: TensorConfig::default(),
-            road_width: 2.0,
+            major_half_width: 3.0,
+            minor_half_width: 2.0,
+            curb_radius: 2.0,
             lot: LotConfig {
                 max_lot_area: 1200.0,
                 min_lot_area: 300.0,
@@ -67,6 +76,25 @@ impl Default for UrbanConfig {
             rationalize: RationalizeConfig::default(),
             skirt_width: 3.0,
             skirt_bury_depth: 0.5,
+        }
+    }
+}
+
+impl UrbanConfig {
+    /// Build a [`RoadMeshConfig`] from the current settings.
+    pub fn road_mesh_config(&self) -> RoadMeshConfig {
+        RoadMeshConfig {
+            major_half_width: self.major_half_width,
+            minor_half_width: self.minor_half_width,
+            hub_sides: self.hub_segments,
+            depth_bias: 0.05,
+            texture_scale: 0.1,
+            spline_subdivisions: self.road_resolution as u32,
+            curb_radius: self.curb_radius,
+            skirt: SkirtConfig {
+                width: self.skirt_width,
+                bury_depth: self.skirt_bury_depth,
+            },
         }
     }
 }

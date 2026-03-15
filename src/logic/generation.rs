@@ -169,10 +169,11 @@ fn generate_heightmap_inner(cfg: &TerrainConfig, u_cfg: &UrbanConfig) -> Generat
                 symbios_tensor::prune_unused_roads(&mut graph, &lots);
 
                 // 5. Carve terrain (only the surviving active roads will carve!)
+                let road_mesh_config = u_cfg.road_mesh_config();
                 let road_surface = symbios_tensor::carve_roads(
                     &graph,
                     &mut hm,
-                    u_cfg.road_width,
+                    &road_mesh_config,
                     u_cfg.road_blend_radius,
                 );
                 symbios_tensor::carve_lots(

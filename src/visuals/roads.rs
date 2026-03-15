@@ -75,19 +75,7 @@ pub fn rebuild_roads(
         }
     };
 
-    let mesh_config = symbios_tensor::RoadMeshConfig {
-        major_half_width: config.road_width * 0.5 * 1.5, // Major roads are 1.5x wider
-        minor_half_width: config.road_width * 0.5,
-        hub_sides: config.hub_segments,
-        depth_bias: 0.05,
-        texture_scale: 0.1,
-        spline_subdivisions: config.road_resolution as u32,
-        skirt: symbios_tensor::SkirtConfig {
-            width: config.skirt_width,
-            bury_depth: config.skirt_bury_depth,
-        },
-        curb_radius: 1.0,
-    };
+    let mesh_config = config.road_mesh_config();
 
     let road_meshes = symbios_tensor::generate_road_meshes(graph, heightmap, &mesh_config);
 

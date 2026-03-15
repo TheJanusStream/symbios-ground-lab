@@ -67,7 +67,24 @@ pub fn render_urban_ui(
                             "Snap Radius",
                             1.0..=30.0,
                         );
-                        changed |= slider(ui, &mut config.road_width, "Road Width", 0.5..=10.0);
+                        changed |= slider(
+                            ui,
+                            &mut config.major_half_width,
+                            "Major Half-Width",
+                            0.5..=10.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.minor_half_width,
+                            "Minor Half-Width",
+                            0.5..=8.0,
+                        );
+                        changed |= slider(
+                            ui,
+                            &mut config.curb_radius,
+                            "Curb Radius",
+                            0.0..=8.0,
+                        );
                         changed |= slider(
                             ui,
                             &mut config.road_blend_radius,
