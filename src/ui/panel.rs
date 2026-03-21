@@ -64,6 +64,7 @@ pub fn render_ui(
     let Ok(ctx) = contexts.ctx_mut() else { return };
 
     egui::Window::new("Terraformer")
+        .default_open(false)
         .default_width(320.0)
         .default_pos((10.0, 10.0))
         .show(ctx, |ui| {

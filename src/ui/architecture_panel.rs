@@ -33,8 +33,9 @@ pub fn render_architecture_ui(
         let cfg = config.bypass_change_detection();
 
         egui::Window::new("Architect")
+            .default_open(false)
             .default_width(400.0)
-            .default_pos((10.0, 500.0))
+            .default_pos((10.0, 130.0))
             .vscroll(true)
             .show(ctx, |ui| {
                 let prev_enabled = cfg.enabled;

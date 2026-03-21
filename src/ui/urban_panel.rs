@@ -30,8 +30,9 @@ pub fn render_urban_ui(
     let mut texture_changed = false;
 
     egui::Window::new("Urban Planner")
+        .default_open(false)
         .default_width(300.0)
-        .default_pos((710.0, 10.0))
+        .default_pos((10.0, 90.0))
         .show(ctx, |ui| {
             let mut changed = false;
 
@@ -79,12 +80,7 @@ pub fn render_urban_ui(
                             "Minor Half-Width",
                             0.5..=8.0,
                         );
-                        changed |= slider(
-                            ui,
-                            &mut config.curb_radius,
-                            "Curb Radius",
-                            0.0..=8.0,
-                        );
+                        changed |= slider(ui, &mut config.curb_radius, "Curb Radius", 0.0..=8.0);
                         changed |= slider(
                             ui,
                             &mut config.road_blend_radius,

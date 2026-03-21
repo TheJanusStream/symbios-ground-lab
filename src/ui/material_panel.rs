@@ -56,8 +56,9 @@ pub fn render_material_ui(
         let cfg = config.bypass_change_detection();
 
         egui::Window::new("Materials")
+            .default_open(false)
             .default_width(340.0)
-            .default_pos((350.0, 10.0))
+            .default_pos((10.0, 50.0))
             .show(ctx, |ui| {
                 // ── Enable ────────────────────────────────────────────────
                 // Toggling the enable switch requires a full rebuild of both
