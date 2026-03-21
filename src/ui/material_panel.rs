@@ -22,6 +22,13 @@ use crate::core::material_config::{
     MaterialConfig, MaterialState, MaterialStatus, SplatRuleParams,
 };
 
+/// Render the "Materials" egui window.
+///
+/// Runs every frame in [`EguiPrimaryContextPass`].  Uses manual change
+/// detection (`bypass_change_detection` / `set_changed`) to prevent Bevy's
+/// `ResMut` auto-marking from cancelling in-flight texture tasks.  Splat
+/// rule changes trigger an immediate weight-map rebuild; texture parameter
+/// changes are routed through the debounce timer on [`MaterialState`].
 pub fn render_material_ui(
     mut contexts: EguiContexts,
     mut config: ResMut<MaterialConfig>,

@@ -110,7 +110,7 @@ Then serve `index.html` and the generated `out/` directory from a local HTTP ser
 src/
   main.rs                — App setup: plugins (incl. BevySymbiosShapePlugin,
                            SymbiosTexturePlugin), resources, system schedule
-  lib.rs                 — Re-exports the four top-level modules
+  lib.rs                 — Declares the four top-level modules
   core/
     config.rs            — TerrainConfig, DirtyFlags, ErosionVizState,
                            CurrentHeightMap, GenerationTask, ExportStatus, …

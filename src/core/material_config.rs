@@ -1,3 +1,11 @@
+//! Splat-material configuration and async pipeline state.
+//!
+//! [`MaterialConfig`] holds per-layer splat rules (height/slope thresholds),
+//! procedural texture generator configs (grass, dirt, rock, snow), and global
+//! settings (texture resolution, tile scale).  [`MaterialState`] tracks the
+//! async texture generation → GPU upload pipeline, including debounce timers
+//! to avoid saturating the thread pool during continuous slider drags.
+
 use bevy::prelude::*;
 use bevy_symbios_texture::ground::GroundConfig;
 use bevy_symbios_texture::rock::RockConfig;
